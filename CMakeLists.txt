@@ -7,8 +7,12 @@ project(RaptorCodes4GPU)
 # set(CMAKE_CXX_STANDARD 11)
 # set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-
 aux_source_directory(./src DIR_SRC)
 include_directories(./include)
 
+add_subdirectory(src/cudaRaptorCodes)
+
 add_executable(test ${DIR_SRC})
+
+#Link static and dynamic libraries in other directories
+target_link_libraries(test cudaR10)
