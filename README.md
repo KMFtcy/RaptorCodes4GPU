@@ -5,8 +5,8 @@ Raptor codes (RFC 5053) for data object on GPU.
 ## Build test executable
 
 ```
-mkdir -p build ; \
+(mkdir -p build ; \
 cd build ; \
 cmake .. ; \
-make;
+make;)
 ```
