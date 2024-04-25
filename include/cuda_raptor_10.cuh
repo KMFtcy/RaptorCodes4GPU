@@ -31,4 +31,8 @@ void cudaR10_compute_params(cudaRaptorParam *obj);
 
 void printCudaRaptorParam(const cudaRaptorParam& obj);
 
+void showFirstNonGPU(float* d_y, int N);
+
+__global__ void cudaLTEnc(float *A, float *B, const int N);
+
 #endif

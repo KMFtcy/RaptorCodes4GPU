@@ -66,3 +66,26 @@ void printCudaRaptorParam(const cudaRaptorParam& param) {
     if (param.Cp)
         std::cout << "Cp: " << param.Cp << std::endl;
 }
+
+void showFirstNonGPU(float* d_y, int N){
+    float *hostValue;
+    hostValue = (float *)malloc(N);
+    cudaMemcpy(hostValue, d_y, N * sizeof(float), cudaMemcpyDeviceToHost);
+    for (int i = 0; i < 10; i++)
+    {
+        std::cout << hostValue[i] << std::endl;
+    }
+    free(hostValue);
+}
+
+__global__ void cudaLTEnc(float *A, float *B, const int N)
+{
+    const int bid = blockIdx.x;
+    const int tid = threadIdx.x;
+    const int id = tid + bid * blockDim.x;
+
+    printf("ID: %d - ", id);
+    printf("%f\n", B[id]);
+    B[id] = id * 1.0;
+    // C[id] = A[id] + B[id];
+}
