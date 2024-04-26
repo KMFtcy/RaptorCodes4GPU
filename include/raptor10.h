@@ -95,7 +95,7 @@ int factorial(int n);
  * @param n number to test for primeness
  * @return 1 if the provided number is prime, 0 otherwise
  */
-int is_prime(uint32_t n);
+int device_is_prime(uint32_t n);
 
 /**
  * Choose: binomial choosing among numbers

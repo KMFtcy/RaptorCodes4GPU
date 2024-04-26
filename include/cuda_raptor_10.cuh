@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/** Typedef word: here as a uint32_t type */
+typedef uint32_t word;
+
 typedef struct {
   uint32_t F;
   uint32_t W;
@@ -31,8 +34,8 @@ void cudaR10_compute_params(cudaRaptorParam *obj);
 
 void printCudaRaptorParam(const cudaRaptorParam& obj);
 
-void showFirstNonGPU(float* d_y, int N);
+void showFirstNonGPU(word* d_y, int N);
 
-__global__ void cudaLTEnc(float *A, float *B, const int N);
+__global__ void cudaLTEnc(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1);
 
 #endif

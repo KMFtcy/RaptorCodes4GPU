@@ -34,7 +34,7 @@ int factorial(int n) {
   return result;
 }
 
-int is_prime(uint32_t n) {
+int device_is_prime(uint32_t n) {
   if (n <= 1)
     return 0;
 
@@ -52,7 +52,7 @@ int choose(int i, int j) {
 void r10_Trip(uint32_t K, uint32_t X, uint32_t triple[3], Raptor10 *obj) {
   uint32_t L = obj->K + obj->S + obj->H;
   uint32_t L_ = obj->L;
-  while (!is_prime(L_))
+  while (!device_is_prime(L_))
     L_++;
 
   uint32_t Q = 65521;
@@ -139,7 +139,7 @@ int r10_build_LT_submat(uint32_t K, uint32_t S, uint32_t H, Raptor10 *obj,
                         gf2matrix *A) {
   uint32_t L = K + S + H;
   uint32_t L_ = L;
-  while (!is_prime(L_))
+  while (!device_is_prime(L_))
     L_++;
 
   for (uint32_t i = 0; i < K; i++) {
@@ -170,7 +170,7 @@ void r10_build_LT_mat(uint32_t N, Raptor10 *obj, gf2matrix *G_LT,
                       uint32_t *ESIs) {
   uint32_t L = obj->K + obj->S + obj->H;
   uint32_t L_ = obj->L;
-  while (!is_prime(L_))
+  while (!device_is_prime(L_))
     L_++;
 
   for (uint32_t i = 0; i < obj->N; i++) {
@@ -244,7 +244,7 @@ void r10_compute_params(Raptor10 *obj) {
     ;
 
   // S number of LDPC symbols
-  for (obj->S = ceil(0.01 * obj->K) + X; !is_prime(obj->S); obj->S++)
+  for (obj->S = ceil(0.01 * obj->K) + X; !device_is_prime(obj->S); obj->S++)
     ;
 
   // H number of Half symbols

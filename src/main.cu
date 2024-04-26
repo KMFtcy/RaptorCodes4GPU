@@ -1,27 +1,27 @@
 #include <iostream>
 #include "main.cuh"
+#include <stdint.h>
+#include "raptor_consts.h"
 
 using namespace std;
 
 int main(){
     cout<< "Hello, R11 for GPU!" << endl;
 
-    const int N = 1000;
-    size_t BytesCount = sizeof(float)*N;
+    const int K = 1000;
+    size_t BytesCount = sizeof(float)*K;
 
     //allocate memory for data
-    float *d_x;
-    cudaMalloc((float **)&d_x,BytesCount);
+    word *d_x;
+    cudaMalloc((word **)&d_x,BytesCount);
     cudaMemset(d_x, 0, BytesCount); 
     cout << "Allocate " << BytesCount << "Bytes" << endl;
-    float *d_y;
-    cudaMalloc((float **)&d_y,BytesCount);
+    word *d_y;
+    cudaMalloc((word **)&d_y,BytesCount);
     cudaMemset(d_y, 1, BytesCount);
-    // first 10 of y
-    showFirstNonGPU(d_y, 10);
 
     cudaRaptorParam params;
-    unsigned int K = 44;
+    // unsigned int K = 44;
     params.K = K;
     params.Kmin = 1024; //a minimum target on the number of symbols per source block
     params.Kmax = 8192; //the maximum number of source symbols per source block.
@@ -29,17 +29,26 @@ int main(){
     params.Al = 4; //the symbol alignment parameter, in bytes, 一个symbol的长度
     params.N = 24;
     params.T = 4; // symbol size, in bytes
-
     cudaR10_compute_params(&params);
-    // printCudaRaptorParam(params);
 
-    // 5、调用核函数在设备中进行计算
+    // Copy ramdom table from host to device
+    uint32_t *device_J;
+    uint32_t *device_V0;
+    uint32_t *device_V1;
+    cudaMalloc((uint32_t **)&device_J,10901);
+    cudaMalloc((uint32_t **)&device_V0,250);
+    cudaMalloc((uint32_t **)&device_V1,250);
+    cudaMemcpy(device_J, J, 10901, cudaMemcpyHostToDevice);
+    cudaMemcpy(device_V0, V0, 250, cudaMemcpyHostToDevice);
+    cudaMemcpy(device_V1, V1, 250, cudaMemcpyHostToDevice);
+
+    // Call kernel function to compute on GPU
     dim3 block(1);
     dim3 grid(10);
 
-    cudaLTEnc<<<grid, block>>>(d_x,d_y, N);
-    cudaDeviceSynchronize(); //cudaMemcpy有隐式的同步
-    showFirstNonGPU(d_y, 10);
+    cudaLTEnc<<<grid, block>>>(K, d_x, d_y, params.L, 24, device_J, device_V0, device_V1);
+    cudaDeviceSynchronize();
+    showFirstNonGPU(d_y,10);
 
     //free memory
     cudaFree(d_x);
