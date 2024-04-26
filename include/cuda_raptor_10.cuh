@@ -36,6 +36,10 @@ void printCudaRaptorParam(const cudaRaptorParam& obj);
 
 void showFirstNonGPU(word* d_y, int N);
 
+void allocate_test_pointer(word* p, int BytesCount);
+
+void create_random_table_in_device(uint32_t* J, uint32_t* V0, uint32_t* V1);
+
 __global__ void cudaLTEnc(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1);
 
 #endif

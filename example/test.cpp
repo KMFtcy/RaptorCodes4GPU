@@ -1,6 +1,7 @@
 #include <iostream>
 #include "main.cuh"
 #include <stdint.h>
+#include "cuda_raptor_10.cuh"
 #include "raptor_consts.h"
 
 using namespace std;
@@ -12,13 +13,10 @@ int main(){
     size_t BytesCount = sizeof(float)*K;
 
     //allocate memory for data
-    word *d_x;
-    cudaMalloc((word **)&d_x,BytesCount);
-    cudaMemset(d_x, 0, BytesCount); 
+    word *d_x, *d_y;
+    allocate_test_pointer(d_x, BytesCount);
+    allocate_test_pointer(d_y, BytesCount);
     // cout << "Allocate " << BytesCount << "Bytes" << endl;
-    word *d_y;
-    cudaMalloc((word **)&d_y,BytesCount);
-    cudaMemset(d_y, 1, BytesCount);
 
     cudaRaptorParam params;
     // unsigned int K = 44;
@@ -35,22 +33,17 @@ int main(){
     uint32_t *device_J;
     uint32_t *device_V0;
     uint32_t *device_V1;
-    cudaMalloc((uint32_t **)&device_J,10901);
-    cudaMalloc((uint32_t **)&device_V0,250);
-    cudaMalloc((uint32_t **)&device_V1,250);
-    cudaMemcpy(device_J, J, 10901, cudaMemcpyHostToDevice);
-    cudaMemcpy(device_V0, V0, 250, cudaMemcpyHostToDevice);
-    cudaMemcpy(device_V1, V1, 250, cudaMemcpyHostToDevice);
+    create_random_table_in_device(device_J, device_V0, device_V1);
 
     // Call kernel function to compute on GPU
-    dim3 block(1);
-    dim3 grid(10);
+    // dim3 block(1);
+    // dim3 grid(10);
 
-    cudaLTEnc<<<grid, block>>>(K, d_x, d_y, params.L, 24, device_J, device_V0, device_V1);
-    cudaDeviceSynchronize();
-    showFirstNonGPU(d_y,10);
+    // cudaLTEnc<<<grid, block>>>(K, d_x, d_y, params.L, 24, device_J, device_V0, device_V1);
+    // cudaDeviceSynchronize();
+    // showFirstNonGPU(d_y,10);
 
     //free memory
-    cudaFree(d_x);
-    cudaFree(d_y);
+    // cudaFree(d_x);
+    // cudaFree(d_y);
 }

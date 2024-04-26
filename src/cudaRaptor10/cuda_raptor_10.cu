@@ -1,7 +1,21 @@
 #include "cuda_raptor_10.cuh"
 #include <iostream>
-#include <cuda_runtime.h>
+#include "raptor_consts.h"
 
+
+void allocate_test_pointer(word* p, int BytesCount){
+  cudaMalloc((word **)&p,BytesCount);
+  cudaMemset(p, 0, BytesCount);
+}
+
+void create_random_table_in_device(uint32_t* device_J, uint32_t* device_V0, uint32_t* device_V1){
+  cudaMalloc((uint32_t **)&device_J,10901);
+  cudaMalloc((uint32_t **)&device_V0,250);
+  cudaMalloc((uint32_t **)&device_V1,250);
+  cudaMemcpy(device_J, J, 10901, cudaMemcpyHostToDevice);
+  cudaMemcpy(device_V0, V0, 250, cudaMemcpyHostToDevice);
+  cudaMemcpy(device_V1, V1, 250, cudaMemcpyHostToDevice);
+}
 
 int factorial(int n) {
   int result = 1, i;
