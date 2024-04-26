@@ -1,8 +1,7 @@
 #include <iostream>
-#include "main.cuh"
 #include <stdint.h>
-#include "cuda_raptor_10.cuh"
-#include "raptor_consts.h"
+#include "cuda_raptor_10.h"
+// #include "raptor_consts.h"
 
 using namespace std;
 
@@ -16,7 +15,7 @@ int main(){
     word *d_x, *d_y;
     allocate_test_pointer(d_x, BytesCount);
     allocate_test_pointer(d_y, BytesCount);
-    // cout << "Allocate " << BytesCount << "Bytes" << endl;
+    cout << "Allocate " << BytesCount << "Bytes" << endl;
 
     cudaRaptorParam params;
     // unsigned int K = 44;

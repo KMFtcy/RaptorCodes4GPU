@@ -1,6 +1,9 @@
 #include "cuda_raptor_10.cuh"
 #include <iostream>
-#include "raptor_consts.h"
+extern "C"{
+  #include "raptor_consts.h"
+}
+// #include "raptor_consts.h"
 
 
 void allocate_test_pointer(word* p, int BytesCount){
@@ -147,8 +150,15 @@ __device__ void r10_Trip(uint32_t K, uint32_t L, uint32_t X, uint32_t triple[3],
   triple[2] = b;
 }
 
-__global__ void cudaLTEnc(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
+void cudaLTEnc(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
 {
+  dim3 block(1);
+  dim3 grid(10);
+
+  cudaLTEncImpl<<<grid, block>>>(K, C, EncC, L, N, device_J, device_V0, device_V1);
+}
+
+__global__ void cudaLTEncImpl(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1){
     const int bid = blockIdx.x;
     const int tid = threadIdx.x;
     const int id = tid + bid * blockDim.x;
