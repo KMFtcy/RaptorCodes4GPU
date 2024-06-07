@@ -1,24 +1,7 @@
-/*
- *  Copyright 2020 Roberto Francescon
- *  Copyright 2022 Dominik Danelski
- *  This file is part of freeRaptor.
- *
- *  freeRaptor is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *  freeRaptor is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with freeRaptor.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#include "raptor10.h"
+#include "raptor10.hpp"
 #include <math.h>
 #include <stdint.h>
+#include "raptor_consts.h"
 
 void generate_gray_seq(uint32_t *gray_seq) {
   for (uint32_t i = 0; i < 4000; i++)
@@ -34,7 +17,7 @@ int factorial(int n) {
   return result;
 }
 
-int device_is_prime(uint32_t n) {
+int is_prime(uint32_t n) {
   if (n <= 1)
     return 0;
 
@@ -45,14 +28,23 @@ int device_is_prime(uint32_t n) {
   return 1;
 }
 
-int choose(int i, int j) {
-  return (factorial(i)) / (factorial(j) * factorial(i - j));
+int choose(int n, int k)
+{
+  int result = n;
+
+  for (int i = 2; i <= k; i++)
+  {
+    result *= (n - i + 1);
+    result /= i;
+  }
+
+  return result;
 }
 
 void r10_Trip(uint32_t K, uint32_t X, uint32_t triple[3], Raptor10 *obj) {
   uint32_t L = obj->K + obj->S + obj->H;
   uint32_t L_ = obj->L;
-  while (!device_is_prime(L_))
+  while (!is_prime(L_))
     L_++;
 
   uint32_t Q = 65521;
@@ -92,6 +84,32 @@ uint32_t r10_Deg(uint32_t v) {
   return -1;
 }
 
+uint32_t gray_bits_generate(uint32_t i)
+{
+	return i ^ (int)(floor ((float) (i / 2)));
+}
+
+int choose_gray_bit(uint32_t num, uint32_t g)
+{
+	return (int)((g >> num) & 0x01);
+}
+
+uint32_t non_zero_bits_count(uint32_t v)
+{
+	uint8_t tmp = 0;
+	uint32_t bit_count = 0;;
+	for (int i = 0; i < 32; i++)
+	{
+		tmp = (v >> i) & 0x01;
+		if (tmp == 0x01)
+		{
+			bit_count++;
+		}
+	}
+	return bit_count;
+}
+
+
 int r10_build_LDPC_submat(int K, int S, gf2matrix *A) {
   int a = 0, b = 0;
 
@@ -109,29 +127,63 @@ int r10_build_LDPC_submat(int K, int S, gf2matrix *A) {
   }
 }
 
+int r10_build_I_S_submat(int K, int S, gf2matrix *A) {
+  for (int i = K; i < K + S; i++) {
+    set_entry(A, i - K, i, 1);
+  }
+}
+
 int r10_build_Half_submat(unsigned int K, unsigned int S, unsigned int H,
                           gf2matrix *A) {
-  uint32_t g[4000];
-  generate_gray_seq(&g[0]);
-  uint H_ = ceil((float)H / 2.0);
-  int n_bits = (int)sizeof(*g) * 8;
-  size_t n_words = 4000;
-  uint32_t m[n_words];
 
-  uint j = 0;
-  for (size_t i = 0; i < n_words; i++)
-    if (__builtin_popcount(g[i]) == H_) {
-      m[j] = g[i];
-      j++;
-    }
+  uint32_t g;
+	int m = 0;
+	uint32_t bit_count;
+	uint32_t i = 1;
 
-  // Build the G_HALF submatrix
-  for (uint h = 0; h < H; h++) {
-    for (uint j = 0; j < K + S; j++) {
-      if (m[j] & (1UL << h)) {
-        set_entry(A, h + S, j, 1);
-      }
-    }
+for (int h = 0; h < H; h++)
+	{
+		for (int j = 0; j < (K + S); j++)
+		{
+			while(1)
+			{
+
+
+				g = gray_bits_generate(i);
+				bit_count = non_zero_bits_count(g);
+			//	std::cout << " 1 bit counts: " << bit_count << std::endl; 
+				i++;
+
+				if (bit_count != ceil((double)(H / 2)))
+				{
+					continue;
+				}
+
+			//	std::cout << "H` : " << p->HP << "  1 bit counts: " << 	bit_count << std::endl; 
+			//	gray_bits_print(m);
+			//	std::cout << std::endl;
+
+				m = choose_gray_bit(h, g);
+
+			//	std::cout << "m : " << m << std::endl;
+				// A[h][j] = m;
+        set_entry(A, h + S, j, m);
+
+				// if (m == true)
+				// {
+				// 	G_HALF[h][j] = m;
+				// }
+
+				break;
+			}
+		}
+		i = 0;
+	}
+}
+
+int r10_build_I_H_submat(unsigned int K, unsigned int S, unsigned int H, gf2matrix *A) {
+  for (int i = K + S; i < K + S + H; i++) {
+    set_entry(A, i - K, i, 1);
   }
 }
 
@@ -139,7 +191,7 @@ int r10_build_LT_submat(uint32_t K, uint32_t S, uint32_t H, Raptor10 *obj,
                         gf2matrix *A) {
   uint32_t L = K + S + H;
   uint32_t L_ = L;
-  while (!device_is_prime(L_))
+  while (!is_prime(L_))
     L_++;
 
   for (uint32_t i = 0; i < K; i++) {
@@ -155,7 +207,7 @@ int r10_build_LT_submat(uint32_t K, uint32_t S, uint32_t H, Raptor10 *obj,
 
     set_entry(A, i + S + H, b, 1);
 
-    for (uint j = 1; j <= j_max; j++) {
+    for (int j = 1; j <= j_max; j++) {
       b = (b + a) % L_;
 
       while (b >= L)
@@ -170,7 +222,7 @@ void r10_build_LT_mat(uint32_t N, Raptor10 *obj, gf2matrix *G_LT,
                       uint32_t *ESIs) {
   uint32_t L = obj->K + obj->S + obj->H;
   uint32_t L_ = obj->L;
-  while (!device_is_prime(L_))
+  while (!is_prime(L_))
     L_++;
 
   for (uint32_t i = 0; i < obj->N; i++) {
@@ -188,7 +240,7 @@ void r10_build_LT_mat(uint32_t N, Raptor10 *obj, gf2matrix *G_LT,
 
     set_entry(G_LT, i, b, 1);
 
-    for (uint j = 1; j <= j_max; j++) {
+    for (int j = 1; j <= j_max; j++) {
       b = (b + a) % L_;
 
       while (b >= obj->L)
@@ -229,8 +281,12 @@ int r10_build_constraints_mat(Raptor10 *obj, gf2matrix *A) {
   // build the LT submatrix
   r10_build_LT_submat(obj->K, obj->S, obj->H, obj, A);
 
+  // print_matrix_to_file(A);
   // invert A
-  gaussjordan_inv(A);
+  if(gaussjordan_inv(A) != 0){
+    printf("inverse wrong\n");
+    return 1;
+  }
 
   return 0;
 }
@@ -239,16 +295,23 @@ void r10_compute_params(Raptor10 *obj) {
   if (!obj->Al && !obj->K && !obj->Kmax && !obj->Kmin && !obj->Gmax)
     return;
 
-  uint32_t X = floor(sqrt(2 * obj->K)); // ESI 的编号
+  uint32_t X = floor(sqrt(2 * obj->K));
   for (; X * X < 2 * obj->K + X; X++)
     ;
 
+    printf("X = %d\n", X);
+
   // S number of LDPC symbols
-  for (obj->S = ceil(0.01 * obj->K) + X; !device_is_prime(obj->S); obj->S++)
+  for (obj->S = ceil(0.01 * obj->K) + X; !is_prime(obj->S); obj->S++)
     ;
 
   // H number of Half symbols
-  for (obj->H = 1; choose(obj->H, ceil(obj->H / 2)) < obj->K + obj->S; obj->H++)
+  printf("**%d**\n", obj->K + obj->S);
+  for (obj->H = 1; choose(obj->H, (int)ceil((double)obj->H / 2)) < (obj->K + obj->S); obj->H++){
+    printf("----\n");
+    printf("(%d, %d) %d\n", obj->H, (int)ceil((double)obj->H / 2), choose(obj->H, ceil((double)obj->H / 2)));
+    printf("----\n");
+  }
     ;
 
   // L number of intermediate symbols
@@ -258,36 +321,26 @@ void r10_compute_params(Raptor10 *obj) {
 void r10_multiplication(Raptor10 *obj, gf2matrix *A, uint8_t *block,
                         uint8_t *res_block) {
   int beg = 0;
-  for (uint j = 0; j < get_ncols(A); j++)
-    for (uint i = 0; i < get_nrows(A); i++)
+  for (int j = 0; j < get_ncols(A); j++)
+    for (int i = 0; i < get_nrows(A); i++)
       if (get_entry(A, i, j)) {
         if (!beg)
-          for (uint t = 0; t < obj->T; t++)
+          for (int t = 0; t < obj->T; t++)
             res_block[i + t] = block[j + t];
         else
-          for (uint t = 0; t < obj->T; t++)
+          for (int t = 0; t < obj->T; t++)
             res_block[i + t] = res_block[i + t] ^ block[j + t];
       }
 }
 
-void r10_encode(uint8_t *src_s, uint8_t *enc_s, Raptor10 *obj, gf2matrix *A) {
+void r10_encode(uint8_t *src_s, uint8_t *enc_s, Raptor10 *obj, gf2matrix *A, gf2matrix *G_LT, uint32_t *ESIs) {
   // Multiply constraints matrix with input block to obtain intermediate
   // symbols
   uint8_t int_symbols[obj->L];
   r10_multiplication(obj, A, src_s, int_symbols);
 
-  // Calculate the LT matrix and encoded symbols
-  gf2matrix G_LT;
-  allocate_gf2matrix(&G_LT, obj->L, obj->N);
-
-  // Create vector of ESIs
-  uint32_t ESIs[obj->N];
-  for (uint32_t i = 0; i < obj->N; i++)
-    ESIs[i] = i;
-
   // Build the LT matrix and encode
-  r10_build_LT_mat(obj->N, obj, &G_LT, ESIs);
-  r10_multiplication(obj, A, int_symbols, enc_s);
+  r10_multiplication(obj, G_LT, int_symbols, enc_s);
 }
 
 void r10_decode(uint8_t *enc_s, uint8_t *dec_s, Raptor10 *obj, gf2matrix *A,

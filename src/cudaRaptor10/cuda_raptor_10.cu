@@ -1,14 +1,11 @@
 #include "cuda_raptor_10.cuh"
 #include <iostream>
-extern "C"{
-  #include "raptor_consts.h"
-}
-// #include "raptor_consts.h"
+#include "raptor_consts.h"
 
 
 void allocate_test_pointer(word* p, int BytesCount){
   cudaMalloc((word **)&p,BytesCount);
-  cudaMemset(p, 0, BytesCount);
+  cudaMemset(p, 1, BytesCount);
 }
 
 void create_random_table_in_device(uint32_t* device_J, uint32_t* device_V0, uint32_t* device_V1){
@@ -103,8 +100,9 @@ void showFirstNonGPU(word* d_y, int N){
     cudaMemcpy(hostValue, d_y, N * sizeof(float), cudaMemcpyDeviceToHost);
     for (int i = 0; i < 10; i++)
     {
-        std::cout << hostValue[i] << std::endl;
+        std::cout << hostValue[i] << " | ";
     }
+    std::cout << std::endl;
     free(hostValue);
 }
 
@@ -156,6 +154,7 @@ void cudaLTEnc(const int K, word *C, word *EncC, const int L, const int N, uint3
   dim3 grid(10);
 
   cudaLTEncImpl<<<grid, block>>>(K, C, EncC, L, N, device_J, device_V0, device_V1);
+  cudaDeviceSynchronize();
 }
 
 __global__ void cudaLTEncImpl(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1){
@@ -187,6 +186,6 @@ __global__ void cudaLTEncImpl(const int K, word *C, word *EncC, const int L, con
         b = (b + a) % L_;
 
       result = result ^ C[b];
-      EncC[id] = result;
     }
+    EncC[id] = result;
 }

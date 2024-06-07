@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdint.h>
 #include "cuda_raptor_10.h"
+#include <cuda_runtime.h>
 // #include "raptor_consts.h"
 
 using namespace std;
@@ -8,7 +9,7 @@ using namespace std;
 int main(){
     // cout<< "Hello, R11 for GPU!" << endl;
 
-    const int K = 1000;
+    const int K = 8192;
     size_t BytesCount = sizeof(float)*K;
 
     //allocate memory for data
@@ -35,12 +36,10 @@ int main(){
     create_random_table_in_device(device_J, device_V0, device_V1);
 
     // Call kernel function to compute on GPU
-    // dim3 block(1);
-    // dim3 grid(10);
-
-    // cudaLTEnc<<<grid, block>>>(K, d_x, d_y, params.L, 24, device_J, device_V0, device_V1);
-    // cudaDeviceSynchronize();
-    // showFirstNonGPU(d_y,10);
+    showFirstNonGPU(d_x,10);
+    showFirstNonGPU(d_y,10);
+    cudaLTEnc(K, d_x, d_y, params.L, 24, device_J, device_V0, device_V1);
+    showFirstNonGPU(d_y,10);
 
     //free memory
     // cudaFree(d_x);

@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include <gf2matrix.h>
+#include <gf2matrix.hpp>
 #include <raptor_consts.h> // J, C1 and C2
 
 /** Type symbols is a Raptor 10 symbol: a K bytes array*/
@@ -95,7 +95,7 @@ int factorial(int n);
  * @param n number to test for primeness
  * @return 1 if the provided number is prime, 0 otherwise
  */
-int device_is_prime(uint32_t n);
+int is_prime(uint32_t n);
 
 /**
  * Choose: binomial choosing among numbers
@@ -189,7 +189,8 @@ void r10_multiplication(Raptor10 *obj, gf2matrix *A, uint8_t *block,
  * @param obj Raptor10 coder object with configuration parameters
  * @param A constraints matrix
  */
-void r10_encode(uint8_t *src_s, uint8_t *enc_s, Raptor10 *obj, gf2matrix *A);
+// void r10_encode(uint8_t *src_s, uint8_t *enc_s, Raptor10 *obj, gf2matrix *A);
+void r10_encode(uint8_t *src_s, uint8_t *enc_s, Raptor10 *obj, gf2matrix *A, gf2matrix *G_LT, uint32_t *ESIs);
 
 /**
  * Decoding function
