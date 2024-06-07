@@ -5,7 +5,7 @@
 
 void allocate_test_pointer(word* p, int BytesCount){
   cudaMalloc((word **)&p,BytesCount);
-  cudaMemset(p, 1, BytesCount);
+  cudaMemset(p, 0, BytesCount);
 }
 
 void create_random_table_in_device(uint32_t* device_J, uint32_t* device_V0, uint32_t* device_V1){
@@ -48,8 +48,16 @@ __device__ int device_is_prime(uint32_t n) {
   return 1;
 }
 
-int choose(int i, int j) {
-  return (factorial(i)) / (factorial(j) * factorial(i - j));
+int choose(int n, int k) {
+  int result = n;
+
+  for (int i = 2; i <= k; i++)
+  {
+    result *= (n - i + 1);
+    result /= i;
+  }
+
+  return result;
 }
 
 void cudaR10_compute_params(cudaRaptorParam *obj) {
