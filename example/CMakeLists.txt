@@ -7,7 +7,7 @@ check_language(CUDA)
 # add library
 include_directories(../include)
 
-add_executable(cuTest test.cpp)
+add_executable(cuTest gpu_test.cpp)
 add_executable(cpuTest cpu_test.cpp)
 
 #Link static and dynamic libraries in other directories

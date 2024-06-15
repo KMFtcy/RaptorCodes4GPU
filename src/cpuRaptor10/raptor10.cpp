@@ -1,3 +1,4 @@
+#include <iostream>
 #include "raptor10.hpp"
 #include <math.h>
 #include <stdint.h>
@@ -292,6 +293,7 @@ int r10_build_constraints_mat(Raptor10 *obj, gf2matrix *A) {
 }
 
 void r10_compute_params(Raptor10 *obj) {
+  std::cout << "computing params" << std::endl;
   if (!obj->Al && !obj->K && !obj->Kmax && !obj->Kmin && !obj->Gmax)
     return;
 
@@ -306,13 +308,8 @@ void r10_compute_params(Raptor10 *obj) {
     ;
 
   // H number of Half symbols
-  printf("**%d**\n", obj->K + obj->S);
-  for (obj->H = 1; choose(obj->H, (int)ceil((double)obj->H / 2)) < (obj->K + obj->S); obj->H++){
-    printf("----\n");
-    printf("(%d, %d) %d\n", obj->H, (int)ceil((double)obj->H / 2), choose(obj->H, ceil((double)obj->H / 2)));
-    printf("----\n");
-  }
-    ;
+  // for (obj->H = 1; choose(obj->H, (int)ceil((double)obj->H / 2)) < (obj->K + obj->S); obj->H++);
+  obj -> H = 0;
 
   // L number of intermediate symbols
   obj->L = obj->K + obj->S + obj->H;
