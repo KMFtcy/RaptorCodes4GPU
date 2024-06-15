@@ -73,8 +73,9 @@ void cudaR10_compute_params(cudaRaptorParam *obj) {
     ;
 
   // H number of Half symbols
-  for (obj->H = 1; choose(obj->H, ceil(obj->H / 2)) < obj->K + obj->S; obj->H++)
-    ;
+  // not use for now
+  // for (obj->H = 1; choose(obj->H, ceil(obj->H / 2)) < obj->K + obj->S; obj->H++) ;
+  obj -> H = 0;
 
   // L number of intermediate symbols
   obj->L = obj->K + obj->S + obj->H;

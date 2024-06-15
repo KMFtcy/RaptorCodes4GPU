@@ -6,4 +6,6 @@
 
 __global__ void cudaLTEncImpl(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1);
 
+__device__ void processData(char* d_data, int data_flat_size);
+
 #endif
