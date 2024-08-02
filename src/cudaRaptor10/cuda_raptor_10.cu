@@ -211,14 +211,28 @@ namespace device
     triple[1] = a;
     triple[2] = b;
   }
+
+  // swap two rows
+  __device__ void swap(char **A, char **B, int row1, int row2)
+  {
+    char *tempA = A[row1];
+    A[row1] = A[row2];
+    A[row2] = tempA;
+
+    char *tempB = B[row1];
+    B[row1] = B[row2];
+    B[row2] = tempB;
+  }
 }
 
-__global__ void printRandomTable(const uint32_t* d_J, const uint32_t* d_V0, const uint32_t* d_V1) {
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+__global__ void printRandomTable(const uint32_t *d_J, const uint32_t *d_V0, const uint32_t *d_V1)
+{
+  int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
-    if (idx < 10) {
-        printf("J[%d] = %u, V0[%d] = %u, V1[%d] = %u\n", idx, d_J[idx], idx, d_V0[idx], idx, d_V1[idx]);
-    }
+  if (idx < 10)
+  {
+    printf("J[%d] = %u, V0[%d] = %u, V1[%d] = %u\n", idx, d_J[idx], idx, d_V0[idx], idx, d_V1[idx]);
+  }
 }
 
 __global__ void test_Modify_A(int L, char **A)
@@ -328,25 +342,179 @@ __global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char *
   }
 }
 
-void print_matrix_A(Raptor10 &param, char **A)
+void print_matrix(int row, int col, char **A)
 {
   // Copy A matrix from device to host
-  std::vector<std::vector<char>> _A_host(param.L, std::vector<char>(param.L, 0));
-  for (int i = 0; i < param.L; ++i)
+  std::vector<std::vector<char>> _A_host(row, std::vector<char>(col, 0));
+  for (int i = 0; i < row; ++i)
   {
     char *d_row;
     cudaMemcpy(&d_row, &A[i], sizeof(char *), cudaMemcpyDeviceToHost);
-    cudaMemcpy(_A_host[i].data(), d_row, param.L * sizeof(char), cudaMemcpyDeviceToHost);
+    cudaMemcpy(_A_host[i].data(), d_row, col * sizeof(char), cudaMemcpyDeviceToHost);
   }
 
   // Print A matrix
   std::cout << "A matrix:" << std::endl;
-  for (int i = 0; i < param.L; ++i)
+  for (int i = 0; i < row; ++i)
   {
-    for (int j = 0; j < param.L; ++j)
+    for (int j = 0; j < col; ++j)
     {
       std::cout << static_cast<int>(_A_host[i][j]) << " ";
     }
     std::cout << std::endl;
+  }
+}
+
+char **Matrix_A_Generator(Raptor10 &param)
+{
+  // Generate A matrix
+  std::vector<std::vector<char>> _A(param.L, std::vector<char>(param.L, 0));
+
+  // Allocate device pointer array
+  char **A;
+  cudaMalloc(&A, param.L * sizeof(char *));
+
+  // Allocate device memory for each row and copy data
+  for (int i = 0; i < param.L; ++i)
+  {
+    char *d_row;
+    cudaMalloc(&d_row, param.L * sizeof(char));
+    cudaMemcpy(d_row, _A[i].data(), param.L * sizeof(char), cudaMemcpyHostToDevice);
+    // Copy device row pointer to device pointer array
+    cudaMemcpy(&A[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+  }
+
+  std::vector<int> h_ESIs(param.K); // Create vector of ESIs of sending symbols
+  for (int i = 0; i < param.K; i++)
+  {
+    h_ESIs[i] = i;
+  }
+  int *ESIs;
+  cudaMalloc(&ESIs, h_ESIs.size() * sizeof(int));
+  cudaMemcpy(ESIs, h_ESIs.data(), h_ESIs.size() * sizeof(int), cudaMemcpyHostToDevice);
+
+  // Create ramdom table
+  uint32_t *d_J;
+  uint32_t *d_V0;
+  uint32_t *d_V1;
+  const size_t J_size = sizeof(J);
+  const size_t V0_size = sizeof(V0);
+  const size_t V1_size = sizeof(V1);
+  cudaMalloc((void **)&d_J, J_size);
+  cudaMalloc((void **)&d_V0, V0_size);
+  cudaMalloc((void **)&d_V1, V1_size);
+  cudaMemcpy(d_J, J, J_size, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_V0, V0, V0_size, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_V1, V1, V1_size, cudaMemcpyHostToDevice);
+  // printRandomTable<<<1, 1>>>(d_J, d_V0, d_V1);
+
+  cudaError_t error;
+  LDPC_Matrix_Generator<<<1, 1>>>(param.K, param.S, A);
+  HALF_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.HP, A);
+  I_S_Matrix_Generator<<<1, 1>>>(param.K, param.S, A);
+  I_H_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, A);
+  G_LT_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.L, param.LP, A, ESIs, param.K, d_J, d_V0, d_V1);
+  cudaDeviceSynchronize();
+  error = cudaGetLastError();
+  if (error != cudaSuccess)
+  {
+    printf("CUDA error: %s\n", cudaGetErrorString(error));
+    exit(1);
+  }
+
+  return A;
+}
+
+__global__ void gaussianElimination(char **A, char **D, int numRows, int numACols, int numDCols)
+{
+  int minDim = (numRows < numACols) ? numRows : numACols;
+  for (int k = 0; k < minDim; ++k)
+  {
+    // find the first non-zero element in the kth column
+    int i_max = k;
+    for (int i = k + 1; i < numRows; ++i)
+    {
+      if (A[i][k] > A[i_max][k])
+      {
+        i_max = i;
+      }
+    }
+
+    // if the kth column is all zeros, skip this step
+    if (A[i_max][k] == 0)
+    {
+      continue;
+    }
+
+    // swap the kth row with the i_max row
+    if (i_max != k)
+    {
+      device::swap(A, D, k, i_max);
+    }
+
+    // subtract the kth row from the other rows to make the kth column all zeros
+    for (int i = 0; i < numRows; ++i)
+    {
+      if (i != k && A[i][k] == 1)
+      {
+        for (int j = k; j < numACols; ++j)
+        {
+          A[i][j] ^= A[k][j];
+        }
+        for (int j = 0; j < numDCols; ++j)
+        {
+          D[i][j] ^= D[k][j];
+        }
+      }
+    }
+  }
+}
+
+__global__ void init_D(int L, int K, int T, char **D, char **C_prime)
+{
+  for (int i = 0; i < K; ++i)
+  {
+    for (int j = 0; j < T; ++j)
+    {
+      D[L - K + i][j] = C_prime[i][j];
+    }
+  }
+}
+
+__global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char **C, char ** symbols_container, uint32_t *d_J, uint32_t *d_V0, uint32_t *d_V1)
+{
+  int L = K + S + H;
+
+
+  for (int i = 0; i < M; i++)
+  {
+    int ESI = ESIs[i];
+    uint32_t triple[3] = {0};
+    device::r10_Trip(K, L, ESI, triple, d_J, d_V0, d_V1);
+    uint32_t d = triple[0];
+    uint32_t a = triple[1];
+    uint32_t b = triple[2];
+
+    while (b >= L)
+    {
+      b = (b + a) % LP;
+    }
+
+    for (int j = 0; j < T; j++){
+      symbols_container[ESI][j] ^= C[b][j];
+    }
+
+    int min = (d - 1 < L - 1) ? d - 1 : L - 1;
+    for (int j = 1; j <= min; j++)
+    {
+      b = (b + a) % LP;
+      while (b >= L)
+      {
+        b = (b + a) % LP;
+      }
+    for (int j = 0; j < T; j++){
+      symbols_container[ESI][j] ^= C[b][j];
+    }
+    }
   }
 }

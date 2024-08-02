@@ -31,36 +31,40 @@ __global__ void d_multiply_symbols(char *A, char *B, char *C)
     *(C + threadIdx.x) = *(A + threadIdx.x) ^ *(B + threadIdx.x);
 }
 
-void encoding(Raptor10 &param, char **data_dev, char **encoded_data_dev)
+void encoding(Raptor10 &param, char **A, char **data_dev, char **encoded_data_dev)
 {
     // Generate intermediate symbols
-    // Generate A matrix
-    std::vector<std::vector<char>> _A(param.L, std::vector<char>(param.L, 0));
-
-    // Allocate device pointer array
-    char **A;
-    cudaMalloc(&A, param.L * sizeof(char *));
-
-    // Allocate device memory for each row and copy data
-    for (int i = 0; i < param.L; ++i)
+    char **D;
+    cudaMalloc(&D, param.L * sizeof(char *));
+    for (int i = 0; i < param.L; i++)
     {
         char *d_row;
-        cudaMalloc(&d_row, param.L * sizeof(char));
-        cudaMemcpy(d_row, _A[i].data(), param.L * sizeof(char), cudaMemcpyHostToDevice);
-        // Copy device row pointer to device pointer array
-        cudaMemcpy(&A[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+        cudaMalloc(&d_row, param.T * sizeof(char));
+        cudaMemcpy(&D[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
     }
-
-    vector<int> h_ESIs(param.K); // Create vector of ESIs of sending symbols
-    for (int i = 0; i < param.K; i++)
+    init_D<<<1, 1>>>(param.L, param.K, param.T, D, data_dev);
+    cudaDeviceSynchronize();
+    cudaError_t error;
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
     {
-        h_ESIs[i] = i;
+        printf("CUDA error: %s\n", cudaGetErrorString(error));
+        exit(1);
     }
-    int *ESIs;
-    cudaMalloc(&ESIs, h_ESIs.size() * sizeof(int));
-    cudaMemcpy(ESIs, h_ESIs.data(), h_ESIs.size() * sizeof(int), cudaMemcpyHostToDevice);
+    gaussianElimination<<<1, 1>>>(A, D, param.L, param.L, param.T); // now D is the intermediate symbols
+    cudaDeviceSynchronize();
 
-    // Create ramdom table
+    // LT coding
+    cudaMemcpy(encoded_data_dev, data_dev, param.K * sizeof(char *), cudaMemcpyDeviceToDevice);
+    vector<int> ESIs_h(param.N - param.K); // Create vector of ESIs of sending symbols
+    for (int i = 0; i < param.N - param.K; i++)
+    {
+        ESIs_h[i] = param.K + i;
+    }
+    int* ESIs_d;
+    cudaMalloc(&ESIs_d, ESIs_h.size() * sizeof(int));
+    cudaMemcpy(ESIs_d, ESIs_h.data(), ESIs_h.size() * sizeof(int), cudaMemcpyHostToDevice);
+    // create ramdom table
     uint32_t *d_J;
     uint32_t *d_V0;
     uint32_t *d_V1;
@@ -74,13 +78,9 @@ void encoding(Raptor10 &param, char **data_dev, char **encoded_data_dev)
     cudaMemcpy(d_V0, V0, V0_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_V1, V1, V1_size, cudaMemcpyHostToDevice);
     // printRandomTable<<<1, 1>>>(d_J, d_V0, d_V1);
-
-    cudaError_t error;
-    LDPC_Matrix_Generator<<<1, 1>>>(param.K, param.S, A);
-    HALF_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.HP, A);
-    I_S_Matrix_Generator<<<1, 1>>>(param.K, param.S, A);
-    I_H_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, A);
-    G_LT_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.L, param.LP, A, ESIs, param.K, d_J, d_V0, d_V1);
+    cout << "Start LT coding" << endl;
+    LTEnc<<<1, 1>>>(
+        param.K, param.S, param.H, param.T, param.LP, param.N - param.K, ESIs_d, D, encoded_data_dev, d_J, d_V0, d_V1);
     cudaDeviceSynchronize();
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -88,11 +88,6 @@ void encoding(Raptor10 &param, char **data_dev, char **encoded_data_dev)
         printf("CUDA error: %s\n", cudaGetErrorString(error));
         exit(1);
     }
-    cout << "Matrix A Generated" << endl;
-    print_matrix_A(param, A);
-    // generate intermediate symbols
-
-    // LT coding
 }
 
 void decoding(Raptor10 &params, char **data_dev, char **encoded_data_dev)
@@ -180,8 +175,12 @@ int main()
     clock_t start, end;
 
     // Start coding on GPU
+    // Generate A matrix
+    char **A = Matrix_A_Generator(param);
+    cout << "Matrix A Generated" << endl;
+    // print_matrix(param.L, param.L, A);
     start = clock();
-    encoding(param, data_dev, encoded_data_dev);
+    encoding(param, A, data_dev, encoded_data_dev);
     end = clock();
     double encoding_time = (double)(end - start) / CLOCKS_PER_SEC;
 
@@ -195,7 +194,7 @@ int main()
 
     // Analysis
     double running_time = encoding_time;
-    cout << "Coded data size: " << data_size / 1000 << "kbyte" << endl;
+    cout << "Coded data size: " << data_size / 1000.0 << "kbyte" << endl;
     cout << "Coding time: " << running_time << "s" << endl;
-    cout << "Coding rate: " << static_cast<int>(data_size / (1000000 * running_time)) << "MB/s" << endl;
+    cout << "Coding rate: " << static_cast<double>(data_size * 1.0 / (1000000 * running_time)) << "MB/s" << endl;
 }
