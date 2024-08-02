@@ -4,6 +4,64 @@
 #include <stdint.h>
 #include "raptor_consts.h"
 
+
+bool checking_prime_integer(uint32_t v)
+{
+	for (int i = 2; i < v; i++)
+	{
+		if (v % i == 0)
+		{
+			return 0;
+		}
+	}
+
+
+	return 1;
+}
+
+
+
+uint32_t find_smallest_prime_integer(uint32_t v)
+{
+	bool r = 0;
+	uint32_t prime = v;
+	r = checking_prime_integer(prime);
+	while(r == 0)
+	{
+		prime++;
+		r = checking_prime_integer(prime);
+		
+	}
+
+	//prime--;
+
+	return prime;
+}
+int nChoosek( uint32_t n, uint32_t k)
+{
+    if (k > n)
+    {
+    	return 0;
+    }
+    if (k * 2 > n)
+    {
+    	k = n-k;
+    }
+    if (k == 0)
+    {
+    	return 1;
+    }
+
+    int result = n;
+
+    for( int i = 2; i <= k; i++ )
+    {
+        result *= (n-i+1);
+        result /= i;
+    }
+    return result;
+}
+
 void generate_gray_seq(uint32_t *gray_seq) {
   for (uint32_t i = 0; i < 4000; i++)
     gray_seq[i] = i ^ (uint32_t)(floor(i / 2));
@@ -292,6 +350,11 @@ int r10_build_constraints_mat(Raptor10 *obj, gf2matrix *A) {
   return 0;
 }
 
+void r10_compute_params(Raptor10 *obj, int overhead) {
+  r10_compute_params(obj);
+  obj -> N = obj -> K + overhead;
+}
+
 void r10_compute_params(Raptor10 *obj) {
   std::cout << "computing params" << std::endl;
   if (!obj->Al && !obj->K && !obj->Kmax && !obj->Kmin && !obj->Gmax)
@@ -301,18 +364,26 @@ void r10_compute_params(Raptor10 *obj) {
   for (; X * X < 2 * obj->K + X; X++)
     ;
 
-    printf("X = %d\n", X);
-
   // S number of LDPC symbols
   for (obj->S = ceil(0.01 * obj->K) + X; !is_prime(obj->S); obj->S++)
     ;
 
   // H number of Half symbols
-  // for (obj->H = 1; choose(obj->H, (int)ceil((double)obj->H / 2)) < (obj->K + obj->S); obj->H++);
-  obj -> H = 0;
+  for (obj->H = 1; choose(obj->H, (int)ceil((double)obj->H / 2)) < (obj->K + obj->S); obj->H++);
 
   // L number of intermediate symbols
   obj->L = obj->K + obj->S + obj->H;
+
+  int i = 0;
+  //H be the smallest integer such that choose(H,ceil(H/2)) >= K + S
+	for (i = 0; nChoosek(i, ceil((double)(i / 2))) < obj->K + obj->S; i++)
+	{
+		;
+	}
+  obj->H = i;
+  obj->HP = ceil((double)(i / 2));
+
+	obj->LP = find_smallest_prime_integer(obj->L);
 }
 
 void r10_multiplication(Raptor10 *obj, gf2matrix *A, uint8_t *block,
@@ -357,3 +428,5 @@ void r10_decode(uint8_t *enc_s, uint8_t *dec_s, Raptor10 *obj, gf2matrix *A,
   r10_build_LT_mat(obj->K, obj, &G_LT, ESIs);
   r10_multiplication(obj, A, int_symbols, enc_s);
 }
+
+void Matrix_A_Generate(Raptor10 *param);

@@ -78,6 +78,8 @@ typedef struct {
   uint32_t L;
   uint32_t S;
   uint32_t H;
+  uint32_t HP;
+  uint32_t LP;
   uint32_t G;
   uint8_t *C;
   uint8_t *Cp;
@@ -169,6 +171,7 @@ int r10_build_constraints_mat(Raptor10 *obj, gf2matrix *A);
  * @param raptor_obj Raptor10 object to configure
  */
 void r10_compute_params(Raptor10 *obj);
+void r10_compute_params(Raptor10 *obj, int overhead);
 
 /**
  * Method the perform the XOR multiplication

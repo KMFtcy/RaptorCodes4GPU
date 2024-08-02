@@ -8,23 +8,103 @@
 
 using namespace std;
 
-vector<char>* multiply_symbols(vector<char>& A, vector<char>& B) {
-    if (A.size() != B.size()) {
+vector<char> *multiply_symbols(vector<char> &A, vector<char> &B)
+{
+    if (A.size() != B.size())
+    {
         return NULL;
     }
 
     int size = A.size();
-    vector<char>* C = new vector<char>(size, 0);
-    for (int i = 0; i < size; i++) {
+    vector<char> *C = new vector<char>(size, 0);
+    for (int i = 0; i < size; i++)
+    {
         (*C)[i] = A[i] ^ B[i];
     }
     return C;
 }
 
-__global__ void d_multiply_symbols(char* A, char* B, char* C){
+__global__ void d_multiply_symbols(char *A, char *B, char *C)
+{
     int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
 
     *(C + threadIdx.x) = *(A + threadIdx.x) ^ *(B + threadIdx.x);
+}
+
+void encoding(Raptor10 &param, char **data_dev, char **encoded_data_dev)
+{
+    // Generate intermediate symbols
+    // Generate A matrix
+    std::vector<std::vector<char>> _A(param.L, std::vector<char>(param.L, 0));
+
+    // Allocate device pointer array
+    char **A;
+    cudaMalloc(&A, param.L * sizeof(char *));
+
+    // Allocate device memory for each row and copy data
+    for (int i = 0; i < param.L; ++i)
+    {
+        char *d_row;
+        cudaMalloc(&d_row, param.L * sizeof(char));
+        cudaMemcpy(d_row, _A[i].data(), param.L * sizeof(char), cudaMemcpyHostToDevice);
+        // Copy device row pointer to device pointer array
+        cudaMemcpy(&A[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+    }
+
+    vector<int> h_ESIs(param.K); // Create vector of ESIs of sending symbols
+    for (int i = 0; i < param.K; i++)
+    {
+        h_ESIs[i] = i;
+    }
+    int *ESIs;
+    cudaMalloc(&ESIs, h_ESIs.size() * sizeof(int));
+    cudaMemcpy(ESIs, h_ESIs.data(), h_ESIs.size() * sizeof(int), cudaMemcpyHostToDevice);
+
+    // Create ramdom table
+    uint32_t *d_J;
+    uint32_t *d_V0;
+    uint32_t *d_V1;
+    const size_t J_size = sizeof(J);
+    const size_t V0_size = sizeof(V0);
+    const size_t V1_size = sizeof(V1);
+    cudaMalloc((void **)&d_J, J_size);
+    cudaMalloc((void **)&d_V0, V0_size);
+    cudaMalloc((void **)&d_V1, V1_size);
+    cudaMemcpy(d_J, J, J_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_V0, V0, V0_size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_V1, V1, V1_size, cudaMemcpyHostToDevice);
+    // printRandomTable<<<1, 1>>>(d_J, d_V0, d_V1);
+
+    cudaError_t error;
+    LDPC_Matrix_Generator<<<1, 1>>>(param.K, param.S, A);
+    HALF_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.HP, A);
+    I_S_Matrix_Generator<<<1, 1>>>(param.K, param.S, A);
+    I_H_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, A);
+    G_LT_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.L, param.LP, A, ESIs, param.K, d_J, d_V0, d_V1);
+    cudaDeviceSynchronize();
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
+    {
+        printf("CUDA error: %s\n", cudaGetErrorString(error));
+        exit(1);
+    }
+    cout << "Matrix A Generated" << endl;
+    print_matrix_A(param, A);
+    // generate intermediate symbols
+
+    // LT coding
+}
+
+void decoding(Raptor10 &params, char **data_dev, char **encoded_data_dev)
+{
+    int L_ = params.L;
+    while (!is_prime(L_))
+        L_++;
+    vector<int> ESIs(params.N); // Create vector of ESIs of sending symbols
+    for (int i = 0; i < params.N; i++)
+    {
+        ESIs[i] = i;
+    }
 }
 
 int main()
@@ -32,125 +112,90 @@ int main()
     cout << "GPU test begin" << endl;
 
     // Initialize paramaters
-    Raptor10 params;
-    params.Kmin = 1024; // a minimum target on the number of symbols per source block
-    params.Kmax = 8192; // the maximum number of source symbols per source block.
-    params.Gmax = 10;   // a maximum target number of symbols per packet
-    params.T = 1024;    // symbol size, suppose to be a ip packet size
-    params.K = 4000;
-    params.Al = 4; // the symbol alignment parameter, in bytes, 一个symbol的长度
-    int L_ = params.L;
-    r10_compute_params(&params);
-    params.N = params.K + params.S + 10;
-    cout << "K = " << params.K;
-    cout << ", S = " << params.S;
-    cout << ", H = " << params.H;
-    cout << ", L = " << params.L ;
-    cout << ", N = " << params.N << endl;
-    // LT coding params
-    while (!is_prime(L_))
-        L_++;
-    vector<int> ESIs(params.N); // Create vector of ESIs
-    for (int i = 0; i < params.N; i++){
-        ESIs[i] = i;
-    }
+    Raptor10 param;
+    param.Kmin = 1024; // a minimum target on the number of symbols per source block
+    param.Kmax = 8192; // the maximum number of source symbols per source block.
+    param.Gmax = 10;   // a maximum target number of symbols per packet
+    param.T = 1500;    // symbol size
+    param.K = 10;
+    int overhead = 5;
+    r10_compute_params(&param, overhead);
+    cout << "K = " << param.K;
+    cout << ", S = " << param.S;
+    cout << ", H = " << param.H;
+    cout << ", L = " << param.L;
+    cout << ", N = " << param.N << endl;
 
-
-    cout << "test2" << endl;
-    // prepare container for data and encoded data
-    char data[params.K][params.T];
-    char encoded_data[params.K][params.T];
-
-    for (int i = 0; i < params.K; i++)
+    // Allocate test data
+    // prepare data
+    char **data;
+    data = (char **)malloc(param.K * sizeof(char *));
+    for (int i = 0; i < param.K; i++)
     {
-        for (int j = 0; j < params.T; j++)
+        data[i] = (char *)malloc(param.T * sizeof(char));
+    }
+    for (int i = 0; i < param.K; i++)
+    {
+        for (int j = 0; j < param.T; j++)
         {
             data[i][j] = rand() % 256;
-            encoded_data[i][j] = data[i][j];
         }
     }
 
-    cout << "Data: " << endl;
-    for (int i = 0; i < 10; i++)
+    char **encoded_data;
+    encoded_data = (char **)malloc(param.N * sizeof(char *));
+    for (int i = 0; i < param.N; i++)
     {
-        cout << (int)data[i][0] << " | ";
+        encoded_data[i] = (char *)malloc(param.T * sizeof(char));
     }
-    cout << endl;
 
-    // allocate device memory
-    char **d_data, **d_encoded_data;
-    int data_size = params.K * params.T * sizeof(char);
-    int encoded_data_size = params.N * params.T * sizeof(char);
+    // copy data to device memory
+    char **data_dev, **encoded_data_dev;
+    int data_size = param.K * param.T * sizeof(char);
+    int encoded_data_size = param.N * param.T * sizeof(char);
+    cout << "data size: " << data_size << " bytes" << endl;
 
-    cudaMalloc(d_data, data_size);
-    cudaMalloc(d_encoded_data, encoded_data_size);
+    // Allocate memory on the device
+    cudaMalloc(&data_dev, param.K * sizeof(char *));
+    cudaMalloc(&encoded_data_dev, param.N * sizeof(char *));
 
-     // copy data to device memory
-    cudaMemcpy(d_data, data, data_size, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_encoded_data, encoded_data, encoded_data_size, cudaMemcpyHostToDevice);
+    // Allocate memory for each row on the device
+    for (int i = 0; i < param.K; ++i)
+    {
+        char *d_row;
+        cudaMalloc(&d_row, param.T * sizeof(char));
+        cudaMemcpy(d_row, data[i], param.T * sizeof(char), cudaMemcpyHostToDevice);
+        cudaMemcpy(&data_dev[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+    }
 
-    // start coding on GPU
-    int threadsPerBlock = params.T;
-    int blocksPerGrid = params.K;
-    // start LDPC
+    for (int i = 0; i < param.N; ++i)
+    {
+        char *d_row;
+        cudaMalloc(&d_row, param.T * sizeof(char));
+        cudaMemcpy(d_row, encoded_data[i], param.T * sizeof(char), cudaMemcpyHostToDevice);
+        cudaMemcpy(&encoded_data_dev[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+    }
+
+    // Time recording
     clock_t start, end;
-    int a = 0, b = 0;
+
+    // Start coding on GPU
     start = clock();
-    for (int i = 0; i < params.K; i++)
-    {
-        a = 1 + ((int)floor(i / params.S) % (params.S - 1));
-        b = i % params.S;
-        d_multiply_symbols<<<1, threadsPerBlock>>>(d_encoded_data[i], d_encoded_data[params.K + b], d_encoded_data[params.K + b]);
-        b = (b + a) % params.S;
-        d_multiply_symbols<<<1, threadsPerBlock>>>(d_encoded_data[i], d_encoded_data[params.K + b], d_encoded_data[params.K + b]);
-        b = (b + a) % params.S;
-        d_multiply_symbols<<<1, threadsPerBlock>>>(d_encoded_data[i], d_encoded_data[params.K + b], d_encoded_data[params.K + b]);
-        cudaDeviceSynchronize();
-    }
-
-    cout << "test" << endl;
-    // start LDPC
-    // LT coding
-    for (uint32_t i = params.L; i < params.N; i++) {
-        uint32_t triple[3] = {0};
-        uint32_t X = ESIs[i];
-        r10_Trip(params.K, X, triple, &params);
-        uint32_t d = triple[0];
-        uint32_t a = triple[1];
-        uint32_t b = triple[2];
-        uint32_t j_max = fmin((d - 1), (params.L - 1));
-
-        while (b >= params.L){
-          b = (b + a) % L_;
-        }
-
-        d_encoded_data[i] = d_encoded_data[b];
-
-        for (int j = 1; j <= j_max; j++) {
-          b = (b + a) % L_;
-
-          while (b >= params.L)
-              b = (b + a) % L_;
-
-            d_multiply_symbols<<<1, threadsPerBlock>>>(d_encoded_data[i], d_encoded_data[b], d_encoded_data[i]);
-        }
-        cudaDeviceSynchronize();
-    }
-
+    encoding(param, data_dev, encoded_data_dev);
     end = clock();
+    double encoding_time = (double)(end - start) / CLOCKS_PER_SEC;
 
-    // copy data from device memory to host
-    // cudaMemcpy(data_flat.data(), d_data, data_size, cudaMemcpyDeviceToHost);
-    // cudaMemcpy(encoded_data_flat.data(), d_encoded_data, encoded_data_size, cudaMemcpyDeviceToHost);
+    // Randomly drop some symbols
 
-    // free device memory
-    cudaFree(d_data);
-    cudaFree(d_encoded_data);
+    // Decoding on GPU
 
-    // analysis
-    double running_time = (double)(end - start) / CLOCKS_PER_SEC;
-    cout << "Coded data size: " << data_size/1000 << "kbyte" << endl;
+    // Check if the result is correct
+
+    // Free device memory
+
+    // Analysis
+    double running_time = encoding_time;
+    cout << "Coded data size: " << data_size / 1000 << "kbyte" << endl;
     cout << "Coding time: " << running_time << "s" << endl;
     cout << "Coding rate: " << static_cast<int>(data_size / (1000000 * running_time)) << "MB/s" << endl;
-
 }
