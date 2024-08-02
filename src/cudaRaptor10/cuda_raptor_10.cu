@@ -85,48 +85,6 @@ void showFirstNonGPU(word *d_y, int N)
   free(hostValue);
 }
 
-// void cudaLTEnc(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
-// {
-//   dim3 block(1);
-//   dim3 grid(10);
-
-//   cudaLTEncImpl<<<grid, block>>>(K, C, EncC, L, N, device_J, device_V0, device_V1);
-//   cudaDeviceSynchronize();
-// }
-
-// __global__ void cudaLTEncImpl(const int K, word *C, word *EncC, const int L, const int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1){
-//     const int bid = blockIdx.x;
-//     const int tid = threadIdx.x;
-//     const int id = tid + bid * blockDim.x;
-
-//     if (id >= N) return;
-
-//     uint32_t L_ = L;
-//     while (!device_is_prime(L_))
-//         L_++;
-
-//     uint32_t triple[3] = {0};
-//     r10_Trip(K, L, id, triple, device_J, device_V0, device_V1);
-//     uint32_t d = triple[0];
-//     uint32_t a = triple[1];
-//     uint32_t b = triple[2];
-//     uint32_t j_max = min((d - 1), (L - 1));
-
-//     while (b >= L)
-//       b = (b + a) % L_;
-
-//     word result = C[b];
-//     for (uint j = 1; j <= j_max; j++) {
-//       b = (b + a) % L_;
-
-//       while (b >= L)
-//         b = (b + a) % L_;
-
-//       result = result ^ C[b];
-//     }
-//     EncC[id] = result;
-// }
-
 namespace device
 {
   __device__ uint32_t gray_bits_generate(uint32_t i)
@@ -311,9 +269,9 @@ __global__ void I_H_Matrix_Generator(int K, int S, int H, char **A)
   }
 }
 
-__global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char **A, int *ESIs, int M, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
+__global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char **A, int *ESIs, int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
 {
-  for (int i = 0; i < M; i++)
+  for (int i = 0; i < N; i++)
   {
     uint32_t triple[3] = {0};
     device::r10_Trip(K, L, i, triple, device_J, device_V0, device_V1);
@@ -365,10 +323,10 @@ void print_matrix(int row, int col, char **A)
   }
 }
 
-char **Matrix_A_Generator(Raptor10 &param)
+char **Matrix_A_Generator(Raptor10 &param, int* ESIs, int N)
 {
   // Generate A matrix
-  std::vector<std::vector<char>> _A(param.L, std::vector<char>(param.L, 0));
+  std::vector<std::vector<char>> _A(N + param.S + param.H, std::vector<char>(param.L, 0));
 
   // Allocate device pointer array
   char **A;
@@ -383,15 +341,6 @@ char **Matrix_A_Generator(Raptor10 &param)
     // Copy device row pointer to device pointer array
     cudaMemcpy(&A[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
   }
-
-  std::vector<int> h_ESIs(param.K); // Create vector of ESIs of sending symbols
-  for (int i = 0; i < param.K; i++)
-  {
-    h_ESIs[i] = i;
-  }
-  int *ESIs;
-  cudaMalloc(&ESIs, h_ESIs.size() * sizeof(int));
-  cudaMemcpy(ESIs, h_ESIs.data(), h_ESIs.size() * sizeof(int), cudaMemcpyHostToDevice);
 
   // Create ramdom table
   uint32_t *d_J;
@@ -413,7 +362,7 @@ char **Matrix_A_Generator(Raptor10 &param)
   HALF_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.HP, A);
   I_S_Matrix_Generator<<<1, 1>>>(param.K, param.S, A);
   I_H_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, A);
-  G_LT_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.L, param.LP, A, ESIs, param.K, d_J, d_V0, d_V1);
+  G_LT_Matrix_Generator<<<1, 1>>>(param.K, param.S, param.H, param.L, param.LP, A, ESIs, N, d_J, d_V0, d_V1);
   cudaDeviceSynchronize();
   error = cudaGetLastError();
   if (error != cudaSuccess)
@@ -517,4 +466,8 @@ __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char
     }
     }
   }
+}
+
+void random_loss(int* ESIs, char** encoded_data){
+
 }

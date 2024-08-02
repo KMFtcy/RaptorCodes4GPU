@@ -111,7 +111,7 @@ int main()
     param.Kmin = 1024; // a minimum target on the number of symbols per source block
     param.Kmax = 8192; // the maximum number of source symbols per source block.
     param.Gmax = 10;   // a maximum target number of symbols per packet
-    param.T = 1500;    // symbol size
+    param.T = 15;    // symbol size
     param.K = 10;
     int overhead = 5;
     r10_compute_params(&param, overhead);
@@ -122,6 +122,15 @@ int main()
     cout << ", N = " << param.N << endl;
 
     // Allocate test data
+    // create ESIs
+    vector<int> ESIs(param.N);
+    for (int i = 0; i < param.N; i++){
+        ESIs[i] = i;
+    }
+    int* ESIs_d;
+    cudaMalloc(&ESIs_d, ESIs.size() * sizeof(int));
+    cudaMemcpy(ESIs_d, ESIs.data(), ESIs.size() * sizeof(int), cudaMemcpyHostToDevice);
+
     // prepare data
     char **data;
     data = (char **)malloc(param.K * sizeof(char *));
@@ -176,7 +185,7 @@ int main()
 
     // Start coding on GPU
     // Generate A matrix
-    char **A = Matrix_A_Generator(param);
+    char **A = Matrix_A_Generator(param, ESIs_d, param.K);
     cout << "Matrix A Generated" << endl;
     // print_matrix(param.L, param.L, A);
     start = clock();
@@ -185,6 +194,7 @@ int main()
     double encoding_time = (double)(end - start) / CLOCKS_PER_SEC;
 
     // Randomly drop some symbols
+    random_loss(ESIs_d, encoded_data_dev);
 
     // Decoding on GPU
 

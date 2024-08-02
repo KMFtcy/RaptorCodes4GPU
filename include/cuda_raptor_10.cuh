@@ -24,7 +24,7 @@ __global__ void I_H_Matrix_Generator(int K, int S, int H, char **A);
 
 __global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char **A, int *ESIs, int M, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1);
 
-char** Matrix_A_Generator(Raptor10 &param);
+char** Matrix_A_Generator(Raptor10 &param, int* ESIs, int N);
 
 void print_matrix(int row, int col, char **A);
 
@@ -35,5 +35,7 @@ __global__ void gaussianElimination(char **A, char **D, int numRows, int numACol
 __global__ void init_D(int L, int K, int T, char **D, char **C_prime);
 
 __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char **C, char ** symbols_container, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1);
+
+void random_loss(int* ESIs, char** encoded_data);
 
 #endif
