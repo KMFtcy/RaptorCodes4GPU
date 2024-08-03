@@ -36,6 +36,6 @@ __global__ void init_D(int L, int K, int T, char **D, char **C_prime);
 
 __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char **C, char ** symbols_container, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1);
 
-void random_loss(int* ESIs, char** encoded_data);
+void random_loss(int* ESIs, char** encoded_data, int N);
 
 #endif

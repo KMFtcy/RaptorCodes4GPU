@@ -330,10 +330,10 @@ char **Matrix_A_Generator(Raptor10 &param, int* ESIs, int N)
 
   // Allocate device pointer array
   char **A;
-  cudaMalloc(&A, param.L * sizeof(char *));
+  cudaMalloc(&A, (N + param.S + param.H) * sizeof(char *));
 
   // Allocate device memory for each row and copy data
-  for (int i = 0; i < param.L; ++i)
+  for (int i = 0; i < (N + param.S + param.H); ++i)
   {
     char *d_row;
     cudaMalloc(&d_row, param.L * sizeof(char));
@@ -468,6 +468,32 @@ __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char
   }
 }
 
-void random_loss(int* ESIs, char** encoded_data){
+void random_loss(int* ESIs, char** encoded_data, int N){
+    int S = N - 3;
 
+    // Allocate new memory for ESIs
+    int* new_ESIs_d;
+    cudaMalloc((void**)&new_ESIs_d, S * sizeof(int));
+
+    // Copy data from old ESIs to new ESIs
+    cudaMemcpy(new_ESIs_d, ESIs + 3, S * sizeof(int), cudaMemcpyDeviceToDevice);
+
+    // Free old ESIs memory
+    cudaFree(ESIs);
+
+    // Update ESIs pointer to new memory
+    ESIs = new_ESIs_d;
+
+    // Allocate new memory for encoded_data pointers
+    char** new_encoded_data_d;
+    cudaMalloc((void**)&new_encoded_data_d, S * sizeof(char*));
+
+    // Copy pointers from old encoded_data to new encoded_data
+    cudaMemcpy(new_encoded_data_d, *encoded_data + 3, S * sizeof(char*), cudaMemcpyDeviceToDevice);
+
+    // Free old encoded_data pointers memory
+    cudaFree(*encoded_data);
+
+    // Update encoded_data pointer to new memory
+    encoded_data = new_encoded_data_d;
 }

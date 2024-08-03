@@ -31,7 +31,7 @@ __global__ void d_multiply_symbols(char *A, char *B, char *C)
     *(C + threadIdx.x) = *(A + threadIdx.x) ^ *(B + threadIdx.x);
 }
 
-void encoding(Raptor10 &param, char **A, char **data_dev, char **encoded_data_dev)
+void encoding(Raptor10 &param, char **A, char **source_symbols_d, char **encoded_symbols_d)
 {
     // Generate intermediate symbols
     char **D;
@@ -42,7 +42,7 @@ void encoding(Raptor10 &param, char **A, char **data_dev, char **encoded_data_de
         cudaMalloc(&d_row, param.T * sizeof(char));
         cudaMemcpy(&D[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
     }
-    init_D<<<1, 1>>>(param.L, param.K, param.T, D, data_dev);
+    init_D<<<1, 1>>>(param.L, param.K, param.T, D, source_symbols_d);
     cudaDeviceSynchronize();
     cudaError_t error;
     error = cudaGetLastError();
@@ -55,7 +55,7 @@ void encoding(Raptor10 &param, char **A, char **data_dev, char **encoded_data_de
     cudaDeviceSynchronize();
 
     // LT coding
-    cudaMemcpy(encoded_data_dev, data_dev, param.K * sizeof(char *), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(encoded_symbols_d, source_symbols_d, param.K * sizeof(char *), cudaMemcpyDeviceToDevice);
     vector<int> ESIs_h(param.N - param.K); // Create vector of ESIs of sending symbols
     for (int i = 0; i < param.N - param.K; i++)
     {
@@ -80,7 +80,7 @@ void encoding(Raptor10 &param, char **A, char **data_dev, char **encoded_data_de
     // printRandomTable<<<1, 1>>>(d_J, d_V0, d_V1);
     cout << "Start LT coding" << endl;
     LTEnc<<<1, 1>>>(
-        param.K, param.S, param.H, param.T, param.LP, param.N - param.K, ESIs_d, D, encoded_data_dev, d_J, d_V0, d_V1);
+        param.K, param.S, param.H, param.T, param.LP, param.N - param.K, ESIs_d, D, encoded_symbols_d, d_J, d_V0, d_V1);
     cudaDeviceSynchronize();
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -90,16 +90,9 @@ void encoding(Raptor10 &param, char **A, char **data_dev, char **encoded_data_de
     }
 }
 
-void decoding(Raptor10 &params, char **data_dev, char **encoded_data_dev)
+void decoding(Raptor10 &params, char **received_symbols_d, char **decoded_symbols_d, int *ESIs, int N)
 {
-    int L_ = params.L;
-    while (!is_prime(L_))
-        L_++;
-    vector<int> ESIs(params.N); // Create vector of ESIs of sending symbols
-    for (int i = 0; i < params.N; i++)
-    {
-        ESIs[i] = i;
-    }
+
 }
 
 int main()
@@ -114,6 +107,7 @@ int main()
     param.T = 15;    // symbol size
     param.K = 10;
     int overhead = 5;
+    int loss = 3;
     r10_compute_params(&param, overhead);
     cout << "K = " << param.K;
     cout << ", S = " << param.S;
@@ -154,14 +148,14 @@ int main()
     }
 
     // copy data to device memory
-    char **data_dev, **encoded_data_dev;
+    char **source_symbols_d, **encoded_symbols_d;
     int data_size = param.K * param.T * sizeof(char);
     int encoded_data_size = param.N * param.T * sizeof(char);
     cout << "data size: " << data_size << " bytes" << endl;
 
     // Allocate memory on the device
-    cudaMalloc(&data_dev, param.K * sizeof(char *));
-    cudaMalloc(&encoded_data_dev, param.N * sizeof(char *));
+    cudaMalloc(&source_symbols_d, param.K * sizeof(char *));
+    cudaMalloc(&encoded_symbols_d, param.N * sizeof(char *));
 
     // Allocate memory for each row on the device
     for (int i = 0; i < param.K; ++i)
@@ -169,7 +163,7 @@ int main()
         char *d_row;
         cudaMalloc(&d_row, param.T * sizeof(char));
         cudaMemcpy(d_row, data[i], param.T * sizeof(char), cudaMemcpyHostToDevice);
-        cudaMemcpy(&data_dev[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+        cudaMemcpy(&source_symbols_d[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
     }
 
     for (int i = 0; i < param.N; ++i)
@@ -177,7 +171,7 @@ int main()
         char *d_row;
         cudaMalloc(&d_row, param.T * sizeof(char));
         cudaMemcpy(d_row, encoded_data[i], param.T * sizeof(char), cudaMemcpyHostToDevice);
-        cudaMemcpy(&encoded_data_dev[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+        cudaMemcpy(&encoded_symbols_d[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
     }
 
     // Time recording
@@ -189,14 +183,33 @@ int main()
     cout << "Matrix A Generated" << endl;
     // print_matrix(param.L, param.L, A);
     start = clock();
-    encoding(param, A, data_dev, encoded_data_dev);
+    encoding(param, A, source_symbols_d, encoded_symbols_d);
     end = clock();
     double encoding_time = (double)(end - start) / CLOCKS_PER_SEC;
+    cout << "obtain encoded symbols on GPU: " << encoding_time << " s" << endl;
 
     // Randomly drop some symbols
-    random_loss(ESIs_d, encoded_data_dev);
+    cout << "Randomly drop some symbols" << endl;
+    int S = param.N - loss;
+    // Allocate new memory for ESIs
+    int* remained_ESIs_d;
+    cudaMalloc((void**)&remained_ESIs_d, S * sizeof(int));
+    // Copy data from old ESIs to new ESIs
+    cudaMemcpy(remained_ESIs_d, ESIs_d + loss, S * sizeof(int), cudaMemcpyDeviceToDevice);
+    // Free old ESIs memory
+    cudaFree(ESIs_d);
+    // Update ESIs pointer to new memory
+    // ESIs_d = remained_ESIs_d;
+    // Adjust the encoded_symbols_d pointer to skip the first 3 elements
+    char **remained_encoded_symbols_d = encoded_symbols_d + 3;
+    // print_matrix(param.N, param.T, encoded_symbols_d);
+    // print_matrix(param.N - 3, param.T, remained_encoded_symbols_d);
 
     // Decoding on GPU
+    char **decode_A = Matrix_A_Generator(param, remained_ESIs_d, param.N - loss);
+    start = clock();
+    decoding(param, decode_A, remained_encoded_symbols_d, remained_ESIs_d, param.N - loss);
+    end = clock();
 
     // Check if the result is correct
 
