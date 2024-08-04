@@ -30,7 +30,7 @@ void print_matrix(int row, int col, char **A);
 
 void create_random_table_in_device(uint32_t *J, uint32_t *V0, uint32_t *V1);
 
-__global__ void gaussianElimination(char **A, char **D, int numRows, int numACols, int numDCols);
+void gaussianElimination(char **A, char **D, int numRows, int numACols, int numDCols, const int num_threads);
 
 __global__ void init_D(int L, int K, int T, char **D, char **C_prime);
 

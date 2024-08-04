@@ -12,3 +12,7 @@ cd build ; \
 cmake .. ; \
 make;)
 ```
+
+# Notes
+
+Make sure your CUDA is not lower than 5.0 so you can use `rdc=true`.

@@ -168,15 +168,25 @@ namespace device
   }
 
   // swap two rows
-  __device__ void swap(char **A, char **B, int row1, int row2)
+  __global__ void check_and_swap(char **A, char **B, int k, int* target_index)
   {
-    char *tempA = A[row1];
-    A[row1] = A[row2];
-    A[row2] = tempA;
+    if (*target_index == -1){
+      // for (int i = 0; i < 23; i++){
+      //   for (int j = 0; j < 23; j++){
+      //     printf("%d ", A[i][j]);
+      //   }
+      //   printf("\n");
+      // }
+      assert(0 && "can't find a non-zero element in the kth column");
+    }
 
-    char *tempB = B[row1];
-    B[row1] = B[row2];
-    B[row2] = tempB;
+    char *tempA = A[k];
+    A[k] = A[*target_index];
+    A[*target_index] = tempA;
+
+    char *tempB = B[k];
+    B[k] = B[*target_index];
+    B[*target_index] = tempB;
   }
 }
 
@@ -371,53 +381,81 @@ char **Matrix_A_Generator(Raptor10 &param, int* ESIs, int N)
   return A;
 }
 
-__global__ void gaussianElimination(char **A, char **D, int numRows, int numACols, int numDCols)
-{
+__global__ void print_index(int* target_index){
+  printf("target index = %d\n", *target_index);
+}
+
+__global__ void xor_row(char** A, int row1, int row2){
   int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
+
+  A[row2][threadIdx_x] ^= A[row1][threadIdx_x];
+}
+
+// step is the number of threads
+__global__ void gaussianFindMax(int* target_index, char **A, int k, int num_rows){
+  int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (threadIdx_x >= k){
+    if(A[threadIdx_x][k] == 1){
+      *target_index = threadIdx_x;
+      return;
+    }
+  }
+}
+
+__global__ void gaussianEliminateRows(char **A, char **D, int k, int num_rows, int num_ACols, int num_DCols){
+  int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (threadIdx_x != k && A[threadIdx_x][k] == 1){
+    xor_row<<<num_ACols, 1>>>(A, k, threadIdx_x);
+    xor_row<<<num_DCols, 1>>>(D, k, threadIdx_x);
+  }
+}
+
+void gaussianElimination(char **A, char **D, int numRows, int numACols, int numDCols, const int num_threads)
+{
+  int* target_index;
+  cudaMalloc((void**)&target_index, sizeof(int));
+  cudaMemset(target_index, -1, sizeof(int));
+
   int minDim = (numRows < numACols) ? numRows : numACols;
   for (int k = 0; k < minDim; ++k)
   {
     // find the first non-zero element in the kth column
-    int i_max = k;
-    for (int i = k; i < numRows; ++i)
+    gaussianFindMax<<<numRows, 1>>>(target_index, A, k, numRows);
+    cudaDeviceSynchronize();
+    cudaError_t error;
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
     {
-      if (A[i][k] == 1)
-      {
-        i_max = i;
-        break;
-      }
+        printf("CUDA error: %s\n", cudaGetErrorString(error));
+        exit(1);
     }
 
-    // if the kth column is all zeros, skip this step
-    if (A[i_max][k] == 0)
+    // check if there is no 1 in the kth column, if not, swap the kth row with the i_max row
+    device::check_and_swap<<<1, 1>>>(A, D, k, target_index);
+    cudaDeviceSynchronize();
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
     {
-      continue;
-    }
-
-    // printf("i_max = %d\n", i_max);
-
-    // swap the kth row with the i_max row
-    if (i_max != k)
-    {
-      device::swap(A, D, k, i_max);
+        printf("CUDA error: %s\n", cudaGetErrorString(error));
+        exit(1);
     }
 
     // subtract the kth row from the other rows to make the kth column all zeros
-    for (int i = 0; i < numRows; ++i)
+    gaussianEliminateRows<<<numRows, 1>>>(A, D, k, numRows, numACols, numDCols);
+    cudaDeviceSynchronize();
+    error = cudaGetLastError();
+    if (error != cudaSuccess)
     {
-      if (i != k && A[i][k] == 1)
-      {
-        for (int j = k; j < numACols; ++j)
-        {
-          A[i][j] ^= A[k][j];
-        }
-        for (int j = 0; j < numDCols; ++j)
-        {
-          D[i][j] ^= D[k][j];
-        }
-      }
+        printf("CUDA error: %s\n", cudaGetErrorString(error));
+        exit(1);
     }
+    cudaMemset(target_index, -1, sizeof(int));
+
     // printf("A = \n");
+    // print_matrix(numRows, numACols, A);
+    // getchar();
     //   // Print A matrix
     // for (int i = 0; i < numRows; ++i)
     // {

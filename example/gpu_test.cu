@@ -12,6 +12,7 @@ const int packet_size = 1500;
 
 void encoding(Raptor10 &param, char **A, char **source_symbols_d, char **encoded_symbols_d)
 {
+    clock_t start, end;
     // Generate intermediate symbols
     char **D;
     cudaMalloc(&D, param.L * sizeof(char *));
@@ -30,8 +31,11 @@ void encoding(Raptor10 &param, char **A, char **source_symbols_d, char **encoded
         printf("CUDA error: %s\n", cudaGetErrorString(error));
         exit(1);
     }
-    gaussianElimination<<<1, 1>>>(A, D, param.L, param.L, param.T); // now D is the intermediate symbols
+    start = clock();
+    gaussianElimination(A, D, param.L, param.L, param.T, packet_size); // now D is the intermediate symbols
     cudaDeviceSynchronize();
+    end = clock();
+    printf("gaussianElimination time: %f\n", (double)(end - start) / CLOCKS_PER_SEC);
 
     // LT coding
     cudaMemcpy(encoded_symbols_d, source_symbols_d, param.K * sizeof(char *), cudaMemcpyDeviceToDevice);
@@ -70,6 +74,7 @@ void encoding(Raptor10 &param, char **A, char **source_symbols_d, char **encoded
 
 void decoding(Raptor10 &param,char** A, char **decoded_symbols_d,char **received_symbols_d,  int *ESIs, int N)
 {
+    clock_t start, end;
     int M = N + param.S + param.H;
     // Generate intermediate symbols
     char **D;
@@ -89,8 +94,11 @@ void decoding(Raptor10 &param,char** A, char **decoded_symbols_d,char **received
         printf("CUDA error: %s\n", cudaGetErrorString(error));
         exit(1);
     }
-    gaussianElimination<<<1, 1>>>(A, D, M, param.L, param.T); // now the previous L symbols of D is the intermediate symbols
+    start = clock();
+    gaussianElimination(A, D, M, param.L, param.T, packet_size); // now the previous L symbols of D is the intermediate symbols
     cudaDeviceSynchronize();
+    end = clock();
+    printf("gaussianElimination time: %f\n", (double)(end - start) / CLOCKS_PER_SEC);
 
     // Generate the missing ESI array
     // int *all_ESIs = (int *)malloc(param.K * sizeof(int));
@@ -150,7 +158,7 @@ void decoding(Raptor10 &param,char** A, char **decoded_symbols_d,char **received
     cudaMemcpy(d_V0, V0, V0_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_V1, V1, V1_size, cudaMemcpyHostToDevice);
 
-    LTEnc<<<packet_size, 1>>>(param.K, param.S, param.H, param.T, param.LP, param.K, ESIs_d, D, decoded_symbols_d, d_J, d_V0, d_V1);
+    LTEnc<<<param.T, 1>>>(param.K, param.S, param.H, param.T, param.LP, param.K, ESIs_d, D, decoded_symbols_d, d_J, d_V0, d_V1);
     cudaDeviceSynchronize();
     error = cudaGetLastError();
     if (error != cudaSuccess)
