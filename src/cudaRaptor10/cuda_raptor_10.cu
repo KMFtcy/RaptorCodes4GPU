@@ -2,6 +2,7 @@
 #include <iostream>
 #include "raptor_consts.h"
 #include <vector>
+#include <assert.h>
 
 void allocate_test_pointer(word *p, int BytesCount)
 {
@@ -149,12 +150,8 @@ namespace device
     return -1;
   }
 
-  __device__ void r10_Trip(uint32_t K, uint32_t L, int X, uint32_t triple[3], uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
+  __device__ void r10_Trip(uint32_t K, uint32_t LP, int X, uint32_t triple[3], uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
   {
-    uint32_t L_ = L;
-    while (!device::is_prime(L_))
-      L_++;
-
     uint32_t Q = 65521;
     uint32_t A = (53591 + device_J[K - 4] * 997) % Q;
     uint32_t B = 10267 * (device_J[K - 4] + 1) % Q;
@@ -162,8 +159,8 @@ namespace device
     // r10_Rand is passed 2^^20 as required by the RFC5053
     uint32_t v = r10_Rand(Y, 0, (2 << 15) * (2 << 3), device_V0, device_V1);
     uint32_t d = r10_Deg(v);
-    uint32_t a = 1 + r10_Rand(Y, 1, L_ - 1, device_V0, device_V1);
-    uint32_t b = r10_Rand(Y, 2, L_, device_V0, device_V1);
+    uint32_t a = 1 + r10_Rand(Y, 1, LP - 1, device_V0, device_V1);
+    uint32_t b = r10_Rand(Y, 2, LP, device_V0, device_V1);
 
     triple[0] = d;
     triple[1] = a;
@@ -273,8 +270,9 @@ __global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char *
 {
   for (int i = 0; i < N; i++)
   {
+    int ESI = ESIs[i];
     uint32_t triple[3] = {0};
-    device::r10_Trip(K, L, i, triple, device_J, device_V0, device_V1);
+    device::r10_Trip(K, LP, ESI, triple, device_J, device_V0, device_V1);
     uint32_t d = triple[0];
     uint32_t a = triple[1];
     uint32_t b = triple[2];
@@ -294,7 +292,7 @@ __global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char *
       {
         b = (b + a) % LP;
       }
-      // std::cout << "b: " << triple._triple.b << std::endl;
+
       A[i + S + H][b] = 1;
     }
   }
@@ -312,7 +310,6 @@ void print_matrix(int row, int col, char **A)
   }
 
   // Print A matrix
-  std::cout << "A matrix:" << std::endl;
   for (int i = 0; i < row; ++i)
   {
     for (int j = 0; j < col; ++j)
@@ -381,11 +378,12 @@ __global__ void gaussianElimination(char **A, char **D, int numRows, int numACol
   {
     // find the first non-zero element in the kth column
     int i_max = k;
-    for (int i = k + 1; i < numRows; ++i)
+    for (int i = k; i < numRows; ++i)
     {
-      if (A[i][k] > A[i_max][k])
+      if (A[i][k] == 1)
       {
         i_max = i;
+        break;
       }
     }
 
@@ -394,6 +392,8 @@ __global__ void gaussianElimination(char **A, char **D, int numRows, int numACol
     {
       continue;
     }
+
+    // printf("i_max = %d\n", i_max);
 
     // swap the kth row with the i_max row
     if (i_max != k)
@@ -416,16 +416,35 @@ __global__ void gaussianElimination(char **A, char **D, int numRows, int numACol
         }
       }
     }
+    // printf("A = \n");
+    //   // Print A matrix
+    // for (int i = 0; i < numRows; ++i)
+    // {
+    //   for (int j = 0; j < numACols; ++j)
+    //   {
+    //     printf("%d ",A[i][j]);
+    //   }
+    //   printf("\n");
+    // }
+    // printf("D = \n");
+    // for (int i = 0; i < numRows; ++i)
+    // {
+    //   for (int j = 0; j < numDCols; ++j)
+    //   {
+    //     printf("%d ",D[i][j]);
+    //   }
+    //   printf("\n");
+    // }
   }
 }
 
-__global__ void init_D(int L, int K, int T, char **D, char **C_prime)
+__global__ void init_D(int L, int N, int T, char **D, char **C_prime)
 {
-  for (int i = 0; i < K; ++i)
+  for (int i = 0; i < N; ++i)
   {
     for (int j = 0; j < T; ++j)
     {
-      D[L - K + i][j] = C_prime[i][j];
+      D[L - N + i][j] = C_prime[i][j];
     }
   }
 }
@@ -439,7 +458,7 @@ __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char
   {
     int ESI = ESIs[i];
     uint32_t triple[3] = {0};
-    device::r10_Trip(K, L, ESI, triple, d_J, d_V0, d_V1);
+    device::r10_Trip(K, LP, ESI, triple, d_J, d_V0, d_V1);
     uint32_t d = triple[0];
     uint32_t a = triple[1];
     uint32_t b = triple[2];
@@ -496,4 +515,14 @@ void random_loss(int* ESIs, char** encoded_data, int N){
 
     // Update encoded_data pointer to new memory
     encoded_data = new_encoded_data_d;
+}
+
+__global__ void check_result(char** data, char** decoded_data, int K, int T){
+    for (int idx = 0; idx < K; idx++)
+    {
+        for (int j = 0; j < T; j++)
+        {
+            assert(data[idx][j] == decoded_data[idx][j] && "Data mismatch!");
+        }
+    }
 }

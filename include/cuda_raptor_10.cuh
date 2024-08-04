@@ -38,4 +38,6 @@ __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char
 
 void random_loss(int* ESIs, char** encoded_data, int N);
 
+__global__ void check_result(char** data, char** decoded_data, int K, int T);
+
 #endif
