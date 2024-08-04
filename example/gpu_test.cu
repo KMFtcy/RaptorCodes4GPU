@@ -1,13 +1,14 @@
 #include <iostream>
 #include <stdint.h>
 #include "cuda_raptor_10.cuh"
-// #include <cuda_runtime.h>
 #include <vector>
 #include <numeric>
 #include <math.h>
 #include "raptor10.hpp"
 
 using namespace std;
+
+const int packet_size = 1500;
 
 void encoding(Raptor10 &param, char **A, char **source_symbols_d, char **encoded_symbols_d)
 {
@@ -20,7 +21,7 @@ void encoding(Raptor10 &param, char **A, char **source_symbols_d, char **encoded
         cudaMalloc(&d_row, param.T * sizeof(char));
         cudaMemcpy(&D[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
     }
-    init_D<<<1, 1>>>(param.L, param.K, param.T, D, source_symbols_d);
+    init_D<<<packet_size, 1>>>(param.L, param.K, param.T, D, source_symbols_d);
     cudaDeviceSynchronize();
     cudaError_t error;
     error = cudaGetLastError();
@@ -56,7 +57,7 @@ void encoding(Raptor10 &param, char **A, char **source_symbols_d, char **encoded
     cudaMemcpy(d_V0, V0, V0_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_V1, V1, V1_size, cudaMemcpyHostToDevice);
     // printRandomTable<<<1, 1>>>(d_J, d_V0, d_V1);
-    LTEnc<<<1, 1>>>(
+    LTEnc<<<packet_size, 1>>>(
         param.K, param.S, param.H, param.T, param.LP, param.N - param.K, ESIs_d, D, encoded_symbols_d, d_J, d_V0, d_V1);
     cudaDeviceSynchronize();
     error = cudaGetLastError();
@@ -79,7 +80,7 @@ void decoding(Raptor10 &param,char** A, char **decoded_symbols_d,char **received
         cudaMalloc(&d_row, param.T * sizeof(char));
         cudaMemcpy(&D[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
     }
-    init_D<<<1, 1>>>(M, N, param.T, D, received_symbols_d);
+    init_D<<<packet_size, 1>>>(M, N, param.T, D, received_symbols_d);
     cudaDeviceSynchronize();
     cudaError_t error;
     error = cudaGetLastError();
@@ -149,7 +150,7 @@ void decoding(Raptor10 &param,char** A, char **decoded_symbols_d,char **received
     cudaMemcpy(d_V0, V0, V0_size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_V1, V1, V1_size, cudaMemcpyHostToDevice);
 
-    LTEnc<<<1, 1>>>(param.K, param.S, param.H, param.T, param.LP, param.K, ESIs_d, D, decoded_symbols_d, d_J, d_V0, d_V1);
+    LTEnc<<<packet_size, 1>>>(param.K, param.S, param.H, param.T, param.LP, param.K, ESIs_d, D, decoded_symbols_d, d_J, d_V0, d_V1);
     cudaDeviceSynchronize();
     error = cudaGetLastError();
     if (error != cudaSuccess)
@@ -169,7 +170,7 @@ int main()
     param.Kmin = 1024; // a minimum target on the number of symbols per source block
     param.Kmax = 8192; // the maximum number of source symbols per source block.
     param.Gmax = 10;   // a maximum target number of symbols per packet
-    param.T = 1500;    // symbol size
+    param.T = packet_size;    // symbol size
     param.K = 100;
     int overhead = 10;
     int loss = 3;
@@ -259,6 +260,7 @@ int main()
     char **remained_encoded_symbols_d = encoded_symbols_d + loss;
 
     // Decoding on GPU
+    cout << "Decoding on GPU" << endl;
     char **decode_A = Matrix_A_Generator(param, remained_ESIs_d, param.N - loss);
     char** decoded_data_d;
     cudaMalloc(&decoded_data_d, param.K * sizeof(char *));
@@ -300,7 +302,7 @@ int main()
     cout << "Successfully decoded!" << endl;
     cout << "Coded data size: " << data_size / 1000.0 << "kbyte" << endl;
     cout << "Encoding time: " << encoding_time << "s" << endl;
-    cout << "Encoding rate: " << static_cast<double>(data_size * 1.0 / (1000000 * encoding_time)) << "MB/s" << endl;
+    cout << "Encoding rate: " << static_cast<double>(data_size * 1.0 / (1000 * encoding_time)) << "kB/s" << endl;
     cout << "Decoding time: " << decoding_time << "s" << endl;
-    cout << "Decoding rate: " << static_cast<double>(data_size * 1.0 / (1000000 * decoding_time)) << "MB/s" << endl;
+    cout << "Decoding rate: " << static_cast<double>(data_size * 1.0 / (1000 * decoding_time)) << "kB/s" << endl;
 }

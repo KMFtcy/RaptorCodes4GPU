@@ -373,6 +373,7 @@ char **Matrix_A_Generator(Raptor10 &param, int* ESIs, int N)
 
 __global__ void gaussianElimination(char **A, char **D, int numRows, int numACols, int numDCols)
 {
+  int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
   int minDim = (numRows < numACols) ? numRows : numACols;
   for (int k = 0; k < minDim; ++k)
   {
@@ -440,19 +441,18 @@ __global__ void gaussianElimination(char **A, char **D, int numRows, int numACol
 
 __global__ void init_D(int L, int N, int T, char **D, char **C_prime)
 {
+  int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
+
   for (int i = 0; i < N; ++i)
   {
-    for (int j = 0; j < T; ++j)
-    {
-      D[L - N + i][j] = C_prime[i][j];
-    }
+    D[L - N + i][threadIdx_x] = C_prime[i][threadIdx_x];
   }
 }
 
 __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char **C, char ** symbols_container, uint32_t *d_J, uint32_t *d_V0, uint32_t *d_V1)
 {
+  int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
   int L = K + S + H;
-
 
   for (int i = 0; i < M; i++)
   {
@@ -468,9 +468,7 @@ __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char
       b = (b + a) % LP;
     }
 
-    for (int j = 0; j < T; j++){
-      symbols_container[ESI][j] ^= C[b][j];
-    }
+    symbols_container[ESI][threadIdx_x] ^= C[b][threadIdx_x];
 
     int min = (d - 1 < L - 1) ? d - 1 : L - 1;
     for (int j = 1; j <= min; j++)
@@ -480,9 +478,7 @@ __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char
       {
         b = (b + a) % LP;
       }
-    for (int j = 0; j < T; j++){
-      symbols_container[ESI][j] ^= C[b][j];
-    }
+      symbols_container[ESI][threadIdx_x] ^= C[b][threadIdx_x];
     }
   }
 }
