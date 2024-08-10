@@ -168,7 +168,7 @@ namespace device
   }
 
   // swap two rows
-  __global__ void check_and_swap(char **A, char **B, int k, int* target_index)
+  __global__ void check_and_swap(process_unit **A, process_unit **B, int k, int* target_index)
   {
     if (*target_index == -1){
       // for (int i = 0; i < 23; i++){
@@ -180,11 +180,11 @@ namespace device
       assert(0 && "can't find a non-zero element in the kth column");
     }
 
-    char *tempA = A[k];
+    process_unit *tempA = A[k];
     A[k] = A[*target_index];
     A[*target_index] = tempA;
 
-    char *tempB = B[k];
+    process_unit *tempB = B[k];
     B[k] = B[*target_index];
     B[*target_index] = tempB;
   }
@@ -200,7 +200,7 @@ __global__ void printRandomTable(const uint32_t *d_J, const uint32_t *d_V0, cons
   }
 }
 
-__global__ void test_Modify_A(int L, char **A)
+__global__ void test_Modify_A(int L, process_unit **A)
 {
   for (int i = 0; i < L; i++)
   {
@@ -208,7 +208,7 @@ __global__ void test_Modify_A(int L, char **A)
   }
 }
 
-__global__ void LDPC_Matrix_Generator(int K, int S, char **A)
+__global__ void LDPC_Matrix_Generator(int K, int S, process_unit **A)
 {
   uint32_t a = 0;
   uint32_t b = 0;
@@ -225,7 +225,7 @@ __global__ void LDPC_Matrix_Generator(int K, int S, char **A)
   }
 }
 
-__global__ void HALF_Matrix_Generator(int K, int S, int H, int HP, char **A)
+__global__ void HALF_Matrix_Generator(int K, int S, int H, int HP, process_unit **A)
 {
 
   uint32_t g;
@@ -260,7 +260,7 @@ __global__ void HALF_Matrix_Generator(int K, int S, int H, int HP, char **A)
   }
 }
 
-__global__ void I_S_Matrix_Generator(int K, int S, char **A)
+__global__ void I_S_Matrix_Generator(int K, int S, process_unit **A)
 {
   for (int i = 0; i < S; i++)
   {
@@ -268,7 +268,7 @@ __global__ void I_S_Matrix_Generator(int K, int S, char **A)
   }
 }
 
-__global__ void I_H_Matrix_Generator(int K, int S, int H, char **A)
+__global__ void I_H_Matrix_Generator(int K, int S, int H, process_unit **A)
 {
   for (int i = 0; i < H; i++)
   {
@@ -276,7 +276,7 @@ __global__ void I_H_Matrix_Generator(int K, int S, int H, char **A)
   }
 }
 
-__global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char **A, int *ESIs, int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
+__global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, process_unit **A, int *ESIs, int N, uint32_t *device_J, uint32_t *device_V0, uint32_t *device_V1)
 {
   for (int i = 0; i < N; i++)
   {
@@ -308,15 +308,15 @@ __global__ void G_LT_Matrix_Generator(int K, int S, int H, int L, int LP, char *
   }
 }
 
-void print_matrix(int row, int col, char **A)
+void print_matrix(int row, int col, process_unit **A)
 {
   // Copy A matrix from device to host
-  std::vector<std::vector<char>> _A_host(row, std::vector<char>(col, 0));
+  std::vector<std::vector<process_unit>> _A_host(row, std::vector<process_unit>(col, 0));
   for (int i = 0; i < row; ++i)
   {
-    char *d_row;
-    cudaMemcpy(&d_row, &A[i], sizeof(char *), cudaMemcpyDeviceToHost);
-    cudaMemcpy(_A_host[i].data(), d_row, col * sizeof(char), cudaMemcpyDeviceToHost);
+    process_unit *d_row;
+    cudaMemcpy(&d_row, &A[i], sizeof(process_unit *), cudaMemcpyDeviceToHost);
+    cudaMemcpy(_A_host[i].data(), d_row, col * sizeof(process_unit), cudaMemcpyDeviceToHost);
   }
 
   // Print A matrix
@@ -330,23 +330,23 @@ void print_matrix(int row, int col, char **A)
   }
 }
 
-char **Matrix_A_Generator(Raptor10 &param, int* ESIs, int N)
+process_unit **Matrix_A_Generator(Raptor10 &param, int* ESIs, int N)
 {
   // Generate A matrix
-  std::vector<std::vector<char>> _A(N + param.S + param.H, std::vector<char>(param.L, 0));
+  std::vector<std::vector<process_unit>> _A(N + param.S + param.H, std::vector<process_unit>(param.L, 0));
 
   // Allocate device pointer array
-  char **A;
-  cudaMalloc(&A, (N + param.S + param.H) * sizeof(char *));
+  process_unit **A;
+  cudaMalloc(&A, (N + param.S + param.H) * sizeof(process_unit *));
 
   // Allocate device memory for each row and copy data
   for (int i = 0; i < (N + param.S + param.H); ++i)
   {
-    char *d_row;
-    cudaMalloc(&d_row, param.L * sizeof(char));
-    cudaMemcpy(d_row, _A[i].data(), param.L * sizeof(char), cudaMemcpyHostToDevice);
+    process_unit *d_row;
+    cudaMalloc(&d_row, param.L * sizeof(process_unit));
+    cudaMemcpy(d_row, _A[i].data(), param.L * sizeof(process_unit), cudaMemcpyHostToDevice);
     // Copy device row pointer to device pointer array
-    cudaMemcpy(&A[i], &d_row, sizeof(char *), cudaMemcpyHostToDevice);
+    cudaMemcpy(&A[i], &d_row, sizeof(process_unit *), cudaMemcpyHostToDevice);
   }
 
   // Create ramdom table
@@ -385,14 +385,14 @@ __global__ void print_index(int* target_index){
   printf("target index = %d\n", *target_index);
 }
 
-__global__ void xor_row(char** A, int row1, int row2){
+__global__ void xor_row(process_unit** A, int row1, int row2){
   int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
 
   A[row2][threadIdx_x] ^= A[row1][threadIdx_x];
 }
 
 // step is the number of threads
-__global__ void gaussianFindMax(int* target_index, char **A, int k, int num_rows){
+__global__ void gaussianFindMax(int* target_index, process_unit **A, int k, int num_rows){
   int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (threadIdx_x >= k){
@@ -403,7 +403,7 @@ __global__ void gaussianFindMax(int* target_index, char **A, int k, int num_rows
   }
 }
 
-__global__ void gaussianEliminateRows(char **A, char **D, int k, int num_rows, int num_ACols, int num_DCols){
+__global__ void gaussianEliminateRows(process_unit **A, process_unit **D, int k, int num_rows, int num_ACols, int num_DCols){
   int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (threadIdx_x != k && A[threadIdx_x][k] == 1){
@@ -412,7 +412,7 @@ __global__ void gaussianEliminateRows(char **A, char **D, int k, int num_rows, i
   }
 }
 
-void gaussianElimination(char **A, char **D, int numRows, int numACols, int numDCols, const int num_threads)
+void gaussianElimination(process_unit **A, process_unit **D, int numRows, int numACols, int numDCols, const int num_threads)
 {
   int* target_index;
   cudaMalloc((void**)&target_index, sizeof(int));
@@ -477,7 +477,7 @@ void gaussianElimination(char **A, char **D, int numRows, int numACols, int numD
   }
 }
 
-__global__ void init_D(int L, int N, int T, char **D, char **C_prime)
+__global__ void init_D(int L, int N, int T, process_unit **D, process_unit **C_prime)
 {
   int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -487,7 +487,7 @@ __global__ void init_D(int L, int N, int T, char **D, char **C_prime)
   }
 }
 
-__global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char **C, char ** symbols_container, uint32_t *d_J, uint32_t *d_V0, uint32_t *d_V1)
+__global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, process_unit **C, process_unit ** symbols_container, uint32_t *d_J, uint32_t *d_V0, uint32_t *d_V1)
 {
   int threadIdx_x = blockIdx.x * blockDim.x + threadIdx.x;
   int L = K + S + H;
@@ -521,7 +521,7 @@ __global__ void LTEnc(int K, int S, int H, int T, int LP, int M, int* ESIs, char
   }
 }
 
-void random_loss(int* ESIs, char** encoded_data, int N){
+void random_loss(int* ESIs, process_unit** encoded_data, int N){
     int S = N - 3;
 
     // Allocate new memory for ESIs
@@ -538,11 +538,11 @@ void random_loss(int* ESIs, char** encoded_data, int N){
     ESIs = new_ESIs_d;
 
     // Allocate new memory for encoded_data pointers
-    char** new_encoded_data_d;
-    cudaMalloc((void**)&new_encoded_data_d, S * sizeof(char*));
+    process_unit** new_encoded_data_d;
+    cudaMalloc((void**)&new_encoded_data_d, S * sizeof(process_unit*));
 
     // Copy pointers from old encoded_data to new encoded_data
-    cudaMemcpy(new_encoded_data_d, *encoded_data + 3, S * sizeof(char*), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(new_encoded_data_d, *encoded_data + 3, S * sizeof(process_unit*), cudaMemcpyDeviceToDevice);
 
     // Free old encoded_data pointers memory
     cudaFree(*encoded_data);
@@ -551,7 +551,7 @@ void random_loss(int* ESIs, char** encoded_data, int N){
     encoded_data = new_encoded_data_d;
 }
 
-__global__ void check_result(char** data, char** decoded_data, int K, int T){
+__global__ void check_result(process_unit** data, process_unit** decoded_data, int K, int T){
     for (int idx = 0; idx < K; idx++)
     {
         for (int j = 0; j < T; j++)

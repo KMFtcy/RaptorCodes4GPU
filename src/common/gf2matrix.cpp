@@ -196,7 +196,7 @@ int gaussjordan_inv(gf2matrix *mat) {
 
     // printf("row %d\n", i);
     // printf("Found 1 on line %d\n", j);
-    // char input;
+    // process_unit input;
     // scanf("%c", &input );
   }
 

@@ -32,6 +32,8 @@
 #include <gf2matrix.hpp>
 #include <raptor_consts.h> // J, C1 and C2
 
+typedef uint32_t process_unit;
+
 /** Type symbols is a Raptor 10 symbol: a K bytes array*/
 typedef uint8_t *Symbol;
 
